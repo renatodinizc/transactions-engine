@@ -8,6 +8,11 @@ A toy payments engine that processes a series of transactions from a CSV, update
 cargo run -- transactions.csv
 ```
 
+## AI Usage Declaration
+
+I used Claude as a pair-programming partner throughout this project for architectural discussion, code review, and guidance on edge cases. Key decisions like module structure, error handling strategy and dependency choices were mine, informed by discussion with the AI.
+
+
 ## Architecture
 
 This project follows a modular, function-oriented architecture inspired by Luca Palmieri's *Zero to Production in Rust*. Rather than wrapping all state in a monolithic struct with methods, the codebase is organized as focused modules with free functions and explicit parameter passing. Structs carry methods only where they own their own invariants (e.g., `Account` balance operations).
