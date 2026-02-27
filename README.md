@@ -42,6 +42,12 @@ I chose skipping over aborting because:
 - At scale (thousands of concurrent TCP streams), aborting everything on one bad row would be catastrophic
 - Real payment systems follow this pattern: skip, log, reconcile later
 
+### Disputes only apply to deposits
+
+The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would further decrease available on an account that already lost funds. For this reason, only deposit transactions are stored in the ledger and eligible for disputes.
+
+In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics -- reversing the withdrawal by increasing available rather than holding funds. This is a meaningful extension that the current architecture could support by adding a transaction type field to the ledger.
+
 ## Future Considerations
 
 ### Per-client parallel processing

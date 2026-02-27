@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
-use crate::{TransactionOperation, TransactionRecord};
+use crate::{TransactionOperation, TransactionRecord, deposit, dispute, withdraw};
 use rust_decimal::Decimal;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Account {
@@ -26,10 +25,18 @@ impl Account {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct StoredTransaction {
+    pub client: u16,
+    pub amount: Decimal,
+    pub disputed: bool,
+}
+
 pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16, Account> {
     // Storing accounts in a hashmap permits O(1) lookups instead
     // of using Vec<ClientAccount> which would do an O(n) lookup.
     let mut all_client_accounts: HashMap<u16, Account> = HashMap::new();
+    let mut stored_transactions: HashMap<u32, StoredTransaction> = HashMap::new();
 
     for transaction in transactions {
         match transaction.operation {
@@ -38,48 +45,27 @@ pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16
                     .entry(transaction.client)
                     .or_insert_with(|| Account::new());
 
-                deposit_op(client_account, transaction.amount);
+                deposit::execute(&mut stored_transactions, client_account, transaction);
             }
             TransactionOperation::Withdrawal => {
                 let client_account = all_client_accounts
                     .entry(transaction.client)
                     .or_insert_with(|| Account::new());
 
-                withdraw_op(client_account, transaction.amount);
+                withdraw::execute(client_account, transaction.amount);
+            }
+            TransactionOperation::Dispute => {
+                let client_account = all_client_accounts
+                    .entry(transaction.client)
+                    .or_insert_with(|| Account::new());
+
+                dispute::execute(&mut stored_transactions, client_account, transaction);
             }
             _ => println!("Operation not implemented yet."),
         }
     }
 
     all_client_accounts
-}
-
-fn withdraw_op(account: &mut Account, amount: Option<Decimal>) {
-    let amount = match amount {
-        Some(a) if a > Decimal::ZERO => a,
-        _ => return eprintln!("not a valid amount number to withdraw: {:?}", amount),
-    };
-
-    if account.locked {
-        return;
-    }
-
-    if account.available >= amount {
-        account.available -= amount;
-    }
-}
-
-fn deposit_op(account: &mut Account, amount: Option<Decimal>) {
-    let amount = match amount {
-        Some(a) if a > Decimal::ZERO => a,
-        _ => return eprintln!("not a valid amount number to deposit: {:?}", amount),
-    };
-
-    if account.locked {
-        return;
-    }
-
-    account.available += amount;
 }
 
 #[cfg(test)]
@@ -100,106 +86,6 @@ mod tests {
             amount,
         }
     }
-
-    // -- Deposit tests --
-
-    #[test]
-    fn deposit_increases_available() {
-        let mut account = Account::new();
-        deposit_op(&mut account, Some(dec!(10.0)));
-        assert_eq!(account.available, dec!(10.0));
-        assert_eq!(account.total(), dec!(10.0));
-    }
-
-    #[test]
-    fn multiple_deposits_accumulate() {
-        let mut account = Account::new();
-        deposit_op(&mut account, Some(dec!(1.1111)));
-        deposit_op(&mut account, Some(dec!(2.2222)));
-        assert_eq!(account.available, dec!(3.3333));
-    }
-
-    #[test]
-    fn deposit_with_none_amount_is_ignored() {
-        let mut account = Account::new();
-        deposit_op(&mut account, None);
-        assert_eq!(account.available, Decimal::ZERO);
-    }
-
-    #[test]
-    fn deposit_with_zero_amount_is_ignored() {
-        let mut account = Account::new();
-        deposit_op(&mut account, Some(Decimal::ZERO));
-        assert_eq!(account.available, Decimal::ZERO);
-    }
-
-    #[test]
-    fn deposit_with_negative_amount_is_ignored() {
-        let mut account = Account::new();
-        deposit_op(&mut account, Some(dec!(-5.0)));
-        assert_eq!(account.available, Decimal::ZERO);
-    }
-
-    #[test]
-    fn deposit_on_locked_account_is_ignored() {
-        let mut account = Account::new();
-        account.locked = true;
-        deposit_op(&mut account, Some(dec!(10.0)));
-        assert_eq!(account.available, Decimal::ZERO);
-    }
-
-    // -- Withdrawal tests --
-
-    #[test]
-    fn withdrawal_decreases_available() {
-        let mut account = Account::new();
-        account.available = dec!(10.0);
-        withdraw_op(&mut account, Some(dec!(3.0)));
-        assert_eq!(account.available, dec!(7.0));
-    }
-
-    #[test]
-    fn withdrawal_with_insufficient_funds_is_rejected() {
-        let mut account = Account::new();
-        account.available = dec!(2.0);
-        withdraw_op(&mut account, Some(dec!(3.0)));
-        assert_eq!(account.available, dec!(2.0));
-    }
-
-    #[test]
-    fn withdrawal_of_exact_balance_succeeds() {
-        let mut account = Account::new();
-        account.available = dec!(5.0);
-        withdraw_op(&mut account, Some(dec!(5.0)));
-        assert_eq!(account.available, Decimal::ZERO);
-    }
-
-    #[test]
-    fn withdrawal_with_none_amount_is_ignored() {
-        let mut account = Account::new();
-        account.available = dec!(10.0);
-        withdraw_op(&mut account, None);
-        assert_eq!(account.available, dec!(10.0));
-    }
-
-    #[test]
-    fn withdrawal_with_negative_amount_is_ignored() {
-        let mut account = Account::new();
-        account.available = dec!(10.0);
-        withdraw_op(&mut account, Some(dec!(-5.0)));
-        assert_eq!(account.available, dec!(10.0));
-    }
-
-    #[test]
-    fn withdrawal_on_locked_account_is_ignored() {
-        let mut account = Account::new();
-        account.available = dec!(10.0);
-        account.locked = true;
-        withdraw_op(&mut account, Some(dec!(5.0)));
-        assert_eq!(account.available, dec!(10.0));
-    }
-
-    // -- process_transactions integration --
 
     #[test]
     fn process_spec_example() {
