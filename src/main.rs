@@ -1,5 +1,5 @@
 use std::{env, process};
-use transactions_engine::csv_handler;
+use transactions_engine::{csv_handler, engine};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -11,10 +11,17 @@ fn main() {
 
     let user_input = &args[1];
 
-    let parsed_csv = csv_handler::read_and_parse(user_input).map_err(|err| {
-        eprintln!("Error reading CSV: {err}");
-        process::exit(1)
-    });
+    let transactions = csv_handler::read_and_parse(user_input)
+        .map_err(|err| {
+            eprintln!("Error reading CSV: {err}");
+            process::exit(1)
+        })
+        .unwrap();
 
-    println!("parsed_csv: {:?}", parsed_csv);
+    let client_accounts = engine::process_transactions(transactions);
+
+    for client in client_accounts.keys() {
+        println!("client: {client}");
+        println!("account: {:?}", client_accounts.get(client));
+    }
 }

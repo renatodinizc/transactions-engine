@@ -8,3 +8,6 @@ csv = "1.4.0"
 eserde = "0.1.7"
 rust_decimal = "1.40.0"
 serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+rust_decimal_macros = "1"

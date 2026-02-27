@@ -41,3 +41,9 @@ I chose skipping over aborting because:
 - The spec's language consistently treats invalid input as "an error on our partner's side" to be ignored
 - At scale (thousands of concurrent TCP streams), aborting everything on one bad row would be catastrophic
 - Real payment systems follow this pattern: skip, log, reconcile later
+
+## Future Considerations
+
+### Per-client parallel processing
+
+Transactions for different clients are independent and could be parallelized by grouping transactions per client and processing each group concurrently (e.g., using Tokio tasks). I kept sequential processing for simplicity and because the spec prioritizes maintainability over efficiency, but the architecture supports this optimization since client accounts are fully isolated from each other.
