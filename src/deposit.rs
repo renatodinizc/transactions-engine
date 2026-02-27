@@ -54,7 +54,7 @@ mod tests {
     #[test]
     fn deposit_increases_available() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         execute(
             &mut ledger,
             &mut account,
@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn multiple_deposits_accumulate() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         execute(
             &mut ledger,
             &mut account,
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn deposit_with_none_amount_is_ignored() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         execute(&mut ledger, &mut account, make_deposit(1, 1, None));
         assert_eq!(account.available, Decimal::ZERO);
     }
@@ -92,7 +92,7 @@ mod tests {
     #[test]
     fn deposit_with_zero_amount_is_ignored() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         execute(
             &mut ledger,
             &mut account,
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn deposit_with_negative_amount_is_ignored() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         execute(
             &mut ledger,
             &mut account,
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn deposit_on_locked_account_is_ignored() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         account.locked = true;
         execute(
             &mut ledger,
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn deposit_stores_transaction_in_ledger() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         execute(
             &mut ledger,
             &mut account,

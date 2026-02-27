@@ -2,7 +2,7 @@ use crate::{TransactionOperation, TransactionRecord, deposit, dispute, withdraw}
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Account {
     pub available: Decimal,
     pub held: Decimal,
@@ -10,15 +10,7 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn new() -> Self {
-        Self {
-            available: Decimal::ZERO,
-            held: Decimal::ZERO,
-            locked: false,
-        }
-    }
-
-    // Having a "total" attribute could be a liability: its an attribute dependend on avaiable + held
+    // Having a "total" attribute could be a liability: its an attribute dependent on available + held
     // and should be computed at the moment to avoid inconsistencies.
     pub fn total(&self) -> Decimal {
         self.available + self.held
@@ -41,23 +33,17 @@ pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16
     for transaction in transactions {
         match transaction.operation {
             TransactionOperation::Deposit => {
-                let client_account = all_client_accounts
-                    .entry(transaction.client)
-                    .or_insert_with(|| Account::new());
+                let client_account = all_client_accounts.entry(transaction.client).or_default();
 
                 deposit::execute(&mut stored_transactions, client_account, transaction);
             }
             TransactionOperation::Withdrawal => {
-                let client_account = all_client_accounts
-                    .entry(transaction.client)
-                    .or_insert_with(|| Account::new());
+                let client_account = all_client_accounts.entry(transaction.client).or_default();
 
                 withdraw::execute(client_account, transaction.amount);
             }
             TransactionOperation::Dispute => {
-                let client_account = all_client_accounts
-                    .entry(transaction.client)
-                    .or_insert_with(|| Account::new());
+                let client_account = all_client_accounts.entry(transaction.client).or_default();
 
                 dispute::execute(&mut stored_transactions, client_account, transaction);
             }

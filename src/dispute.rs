@@ -28,7 +28,7 @@ pub fn execute(
         return;
     }
 
-    if disputed_transaction.disputed == true {
+    if disputed_transaction.disputed {
         println!(
             "A dispute is already undergoing for the transaction {}.",
             current_transaction.tx
@@ -65,7 +65,7 @@ mod tests {
         tx: u32,
         amount: Decimal,
     ) -> Account {
-        let mut account = Account::new();
+        let mut account = Account::default();
         account.available = amount;
         ledger.insert(
             tx,
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn dispute_nonexistent_tx_is_ignored() {
         let mut ledger = HashMap::new();
-        let mut account = Account::new();
+        let mut account = Account::default();
         account.available = dec!(10.0);
 
         execute(&mut ledger, &mut account, make_dispute(1, 99));
@@ -143,7 +143,7 @@ mod tests {
     fn dispute_partial_balance() {
         let mut ledger = HashMap::new();
         // Account has 20, but the disputed deposit was only 10
-        let mut account = Account::new();
+        let mut account = Account::default();
         account.available = dec!(20.0);
         ledger.insert(
             1,
