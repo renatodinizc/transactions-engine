@@ -4,7 +4,8 @@ use rust_decimal::Decimal;
 
 #[derive(Deserialize, Debug)]
 pub struct TransactionRecord {
-    pub r#type: TransactionType,
+    #[serde(rename = "type")]
+    pub operation: TransactionOperation,
     pub client: u16,
     pub tx: u32,
 
@@ -14,7 +15,7 @@ pub struct TransactionRecord {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum TransactionType {
+pub enum TransactionOperation {
     Deposit,
     Withdrawal,
     Dispute,

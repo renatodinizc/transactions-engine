@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{TransactionRecord, TransactionType};
+use crate::{TransactionOperation, TransactionRecord};
 use rust_decimal::Decimal;
 
 #[derive(Debug)]
@@ -32,15 +32,15 @@ pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16
     let mut all_client_accounts: HashMap<u16, Account> = HashMap::new();
 
     for transaction in transactions {
-        match transaction.r#type {
-            TransactionType::Deposit => {
+        match transaction.operation {
+            TransactionOperation::Deposit => {
                 let client_account = all_client_accounts
                     .entry(transaction.client)
                     .or_insert_with(|| Account::new());
 
                 deposit_op(client_account, transaction.amount);
             }
-            TransactionType::Withdrawal => {
+            TransactionOperation::Withdrawal => {
                 let client_account = all_client_accounts
                     .entry(transaction.client)
                     .or_insert_with(|| Account::new());
@@ -88,13 +88,13 @@ mod tests {
     use rust_decimal_macros::dec;
 
     fn make_tx(
-        r#type: TransactionType,
+        operation: TransactionOperation,
         client: u16,
         tx: u32,
         amount: Option<Decimal>,
     ) -> TransactionRecord {
         TransactionRecord {
-            r#type,
+            operation,
             client,
             tx,
             amount,
@@ -204,11 +204,11 @@ mod tests {
     #[test]
     fn process_spec_example() {
         let transactions = vec![
-            make_tx(TransactionType::Deposit, 1, 1, Some(dec!(1.0))),
-            make_tx(TransactionType::Deposit, 2, 2, Some(dec!(2.0))),
-            make_tx(TransactionType::Deposit, 1, 3, Some(dec!(2.0))),
-            make_tx(TransactionType::Withdrawal, 1, 4, Some(dec!(1.5))),
-            make_tx(TransactionType::Withdrawal, 2, 5, Some(dec!(3.0))),
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(1.0))),
+            make_tx(TransactionOperation::Deposit, 2, 2, Some(dec!(2.0))),
+            make_tx(TransactionOperation::Deposit, 1, 3, Some(dec!(2.0))),
+            make_tx(TransactionOperation::Withdrawal, 1, 4, Some(dec!(1.5))),
+            make_tx(TransactionOperation::Withdrawal, 2, 5, Some(dec!(3.0))),
         ];
 
         let accounts = process_transactions(transactions);
