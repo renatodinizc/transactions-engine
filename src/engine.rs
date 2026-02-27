@@ -97,4 +97,84 @@ mod tests {
         assert_eq!(a2.total(), dec!(2.0));
         assert!(!a2.locked);
     }
+
+    #[test]
+    fn deposit_then_dispute_holds_funds() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, dec!(10.0));
+        assert_eq!(a1.total(), dec!(10.0));
+        assert!(!a1.locked);
+    }
+
+    #[test]
+    fn dispute_does_not_affect_other_clients() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Deposit, 2, 2, Some(dec!(20.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, dec!(10.0));
+
+        let a2 = accounts.get(&2).unwrap();
+        assert_eq!(a2.available, dec!(20.0));
+        assert_eq!(a2.held, Decimal::ZERO);
+    }
+
+    #[test]
+    fn dispute_nonexistent_tx_leaves_account_unchanged() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 99, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, Decimal::ZERO);
+    }
+
+    #[test]
+    fn deposit_dispute_then_withdrawal_rejected_on_held_funds() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Withdrawal, 1, 2, Some(dec!(5.0))),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        // Withdrawal should fail: available is 0, funds are held
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, dec!(10.0));
+    }
+
+    #[test]
+    fn partial_dispute_allows_withdrawal_of_remaining() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Deposit, 1, 2, Some(dec!(5.0))),
+            // Dispute only the first deposit
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            // Withdraw from remaining available (5.0)
+            make_tx(TransactionOperation::Withdrawal, 1, 3, Some(dec!(3.0))),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(2.0));
+        assert_eq!(a1.held, dec!(10.0));
+        assert_eq!(a1.total(), dec!(12.0));
+    }
 }
