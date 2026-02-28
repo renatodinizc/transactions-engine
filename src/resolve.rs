@@ -112,7 +112,10 @@ mod tests {
 
         execute(&mut ledger, &mut account, make_resolve(1, 1));
 
-        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::Resolved);
+        assert_eq!(
+            ledger.get(&1).unwrap().dispute_state,
+            DisputeState::Resolved
+        );
     }
 
     #[test]
@@ -136,7 +139,10 @@ mod tests {
 
         assert_eq!(account.held, dec!(10.0));
         assert_eq!(account.available, Decimal::ZERO);
-        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::Disputed);
+        assert_eq!(
+            ledger.get(&1).unwrap().dispute_state,
+            DisputeState::Disputed
+        );
     }
 
     #[test]

@@ -123,7 +123,10 @@ mod tests {
 
         execute(&mut ledger, &mut account, make_dispute(1, 1));
 
-        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::Disputed);
+        assert_eq!(
+            ledger.get(&1).unwrap().dispute_state,
+            DisputeState::Disputed
+        );
     }
 
     #[test]

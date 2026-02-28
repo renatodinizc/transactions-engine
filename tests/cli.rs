@@ -1,7 +1,7 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
-use std::str::{FromStr, from_utf8};
+use std::str::{from_utf8, FromStr};
 
 fn run_engine(args: &[&str]) -> std::process::Output {
     cargo_bin_cmd!("transactions-engine")
@@ -49,7 +49,10 @@ fn empty_input_file_succeeds() {
 
     let output = run_engine(&[path.to_str().unwrap()]);
 
-    assert!(output.status.success(), "Should handle empty input gracefully");
+    assert!(
+        output.status.success(),
+        "Should handle empty input gracefully"
+    );
     let stdout = from_utf8(&output.stdout).unwrap();
     assert!(stdout.trim().is_empty(), "No clients means no output rows");
 

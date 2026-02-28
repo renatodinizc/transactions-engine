@@ -155,7 +155,10 @@ mod tests {
 
         assert_eq!(account.held, dec!(10.0));
         assert!(!account.locked);
-        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::Disputed);
+        assert_eq!(
+            ledger.get(&1).unwrap().dispute_state,
+            DisputeState::Disputed
+        );
     }
 
     #[test]
