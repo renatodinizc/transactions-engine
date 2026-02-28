@@ -1,4 +1,6 @@
-use crate::{TransactionOperation, TransactionRecord, deposit, dispute, resolve, withdraw};
+use crate::{
+    TransactionOperation, TransactionRecord, chargeback, deposit, dispute, resolve, withdraw,
+};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
@@ -52,7 +54,11 @@ pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16
 
                 resolve::execute(&mut stored_transactions, client_account, transaction);
             }
-            _ => println!("Operation not implemented yet."),
+            TransactionOperation::Chargeback => {
+                let client_account = client_accounts.entry(transaction.client).or_default();
+
+                chargeback::execute(&mut stored_transactions, client_account, transaction);
+            }
         }
     }
 
@@ -78,8 +84,10 @@ mod tests {
         }
     }
 
+    // ── Spec reference ──────────────────────────────────────────────
+
     #[test]
-    fn process_spec_example() {
+    fn spec_example() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(1.0))),
             make_tx(TransactionOperation::Deposit, 2, 2, Some(dec!(2.0))),
@@ -103,34 +111,182 @@ mod tests {
         assert!(!a2.locked);
     }
 
+    // ── Full lifecycle flows ────────────────────────────────────────
+
     #[test]
-    fn deposit_then_dispute_holds_funds() {
+    fn deposit_dispute_resolve_returns_funds_to_available() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
             make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Resolve, 1, 1, None),
         ];
 
         let accounts = process_transactions(transactions);
         let a1 = accounts.get(&1).unwrap();
-        assert_eq!(a1.available, Decimal::ZERO);
-        assert_eq!(a1.held, dec!(10.0));
-        assert_eq!(a1.total(), dec!(10.0));
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, Decimal::ZERO);
         assert!(!a1.locked);
     }
 
     #[test]
-    fn dispute_does_not_affect_other_clients() {
+    fn deposit_dispute_chargeback_removes_funds_and_locks() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert_eq!(a1.total(), Decimal::ZERO);
+        assert!(a1.locked);
+    }
+
+    #[test]
+    fn dispute_resolve_redispute_chargeback_full_lifecycle() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Resolve, 1, 1, None),
+            // Re-dispute the same transaction after resolve
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert!(a1.locked);
+    }
+
+    // ── Multi-client isolation ──────────────────────────────────────
+
+    #[test]
+    fn chargeback_on_one_client_does_not_affect_another() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
             make_tx(TransactionOperation::Deposit, 2, 2, Some(dec!(20.0))),
             make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+            // Client 2 can still operate normally
+            make_tx(TransactionOperation::Withdrawal, 2, 3, Some(dec!(5.0))),
         ];
 
         let accounts = process_transactions(transactions);
 
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, Decimal::ZERO);
+        assert!(a1.locked);
+
+        let a2 = accounts.get(&2).unwrap();
+        assert_eq!(a2.available, dec!(15.0));
+        assert!(!a2.locked);
+    }
+
+    #[test]
+    fn interleaved_multi_client_transactions() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(100.0))),
+            make_tx(TransactionOperation::Deposit, 2, 2, Some(dec!(50.0))),
+            make_tx(TransactionOperation::Withdrawal, 1, 3, Some(dec!(30.0))),
+            make_tx(TransactionOperation::Deposit, 3, 4, Some(dec!(75.0))),
+            make_tx(TransactionOperation::Dispute, 2, 2, None),
+            make_tx(TransactionOperation::Withdrawal, 3, 5, Some(dec!(25.0))),
+            make_tx(TransactionOperation::Resolve, 2, 2, None),
+            make_tx(TransactionOperation::Withdrawal, 1, 6, Some(dec!(20.0))),
+        ];
+
+        let accounts = process_transactions(transactions);
+
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(50.0));
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert!(!a1.locked);
+
+        let a2 = accounts.get(&2).unwrap();
+        assert_eq!(a2.available, dec!(50.0));
+        assert_eq!(a2.held, Decimal::ZERO);
+        assert!(!a2.locked);
+
+        let a3 = accounts.get(&3).unwrap();
+        assert_eq!(a3.available, dec!(50.0));
+        assert_eq!(a3.held, Decimal::ZERO);
+        assert!(!a3.locked);
+    }
+
+    // ── Edge cases ──────────────────────────────────────────────────
+
+    #[test]
+    fn dispute_after_partial_withdrawal_causes_negative_available() {
+        // Deposit 10, withdraw 7, then dispute the deposit of 10
+        // available goes to 3 - 10 = -7 (liability/overdraft)
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Withdrawal, 1, 2, Some(dec!(7.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(-7.0));
         assert_eq!(a1.held, dec!(10.0));
+        assert_eq!(a1.total(), dec!(3.0));
+    }
+
+    #[test]
+    fn duplicate_tx_id_overwrites_ledger_entry() {
+        // Two deposits with same tx ID — second overwrites the first
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(5.0))),
+            // Dispute tx 1 — should use the overwritten amount (5.0)
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        // Both deposits credited: 10 + 5 = 15
+        // Dispute holds the second deposit's amount: 15 - 5 = 10 available, 5 held
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, dec!(5.0));
+    }
+
+    #[test]
+    fn locked_account_rejects_deposit_and_withdrawal() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(20.0))),
+            make_tx(TransactionOperation::Deposit, 1, 2, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+            // Account is now locked — these should be ignored
+            make_tx(TransactionOperation::Deposit, 1, 3, Some(dec!(100.0))),
+            make_tx(TransactionOperation::Withdrawal, 1, 4, Some(dec!(5.0))),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert!(a1.locked);
+    }
+
+    #[test]
+    fn cross_client_dispute_is_rejected() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Deposit, 2, 2, Some(dec!(20.0))),
+            // Client 2 tries to dispute client 1's transaction
+            make_tx(TransactionOperation::Dispute, 2, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, Decimal::ZERO);
 
         let a2 = accounts.get(&2).unwrap();
         assert_eq!(a2.available, dec!(20.0));
@@ -138,10 +294,10 @@ mod tests {
     }
 
     #[test]
-    fn dispute_nonexistent_tx_leaves_account_unchanged() {
+    fn resolve_without_prior_dispute_is_ignored() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
-            make_tx(TransactionOperation::Dispute, 1, 99, None),
+            make_tx(TransactionOperation::Resolve, 1, 1, None),
         ];
 
         let accounts = process_transactions(transactions);
@@ -151,35 +307,68 @@ mod tests {
     }
 
     #[test]
-    fn deposit_dispute_then_withdrawal_rejected_on_held_funds() {
+    fn chargeback_without_prior_dispute_is_ignored() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
-            make_tx(TransactionOperation::Dispute, 1, 1, None),
-            make_tx(TransactionOperation::Withdrawal, 1, 2, Some(dec!(5.0))),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
         ];
 
         let accounts = process_transactions(transactions);
         let a1 = accounts.get(&1).unwrap();
-        // Withdrawal should fail: available is 0, funds are held
-        assert_eq!(a1.available, Decimal::ZERO);
-        assert_eq!(a1.held, dec!(10.0));
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert!(!a1.locked);
     }
 
     #[test]
-    fn partial_dispute_allows_withdrawal_of_remaining() {
+    fn dispute_before_deposit_exists_is_ignored() {
         let transactions = vec![
-            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
-            make_tx(TransactionOperation::Deposit, 1, 2, Some(dec!(5.0))),
-            // Dispute only the first deposit
+            // Dispute arrives before the deposit it references
             make_tx(TransactionOperation::Dispute, 1, 1, None),
-            // Withdraw from remaining available (5.0)
-            make_tx(TransactionOperation::Withdrawal, 1, 3, Some(dec!(3.0))),
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
         ];
 
         let accounts = process_transactions(transactions);
         let a1 = accounts.get(&1).unwrap();
-        assert_eq!(a1.available, dec!(2.0));
-        assert_eq!(a1.held, dec!(10.0));
-        assert_eq!(a1.total(), dec!(12.0));
+        // Dispute was a no-op, deposit still credited normally
+        assert_eq!(a1.available, dec!(10.0));
+        assert_eq!(a1.held, Decimal::ZERO);
+    }
+
+    #[test]
+    fn two_chargebacks_on_same_client_from_different_deposits() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Deposit, 1, 2, Some(dec!(5.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+            // Account already locked, but dispute resolution still processes
+            make_tx(TransactionOperation::Dispute, 1, 2, None),
+            make_tx(TransactionOperation::Chargeback, 1, 2, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert_eq!(a1.total(), Decimal::ZERO);
+        assert!(a1.locked);
+    }
+
+    #[test]
+    fn resolve_on_already_chargebacked_tx_is_ignored() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+            // Chargeback cleared disputed flag, so resolve sees undisputed tx
+            make_tx(TransactionOperation::Resolve, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions);
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert!(a1.locked);
     }
 }

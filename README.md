@@ -48,6 +48,10 @@ The spec's dispute mechanics (decrease available, increase held, total unchanged
 
 In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics -- reversing the withdrawal by increasing available rather than holding funds. This is a meaningful extension that the current architecture could support by adding a transaction type field to the ledger.
 
+### Locked accounts block deposits and withdrawals, not dispute resolution
+
+A chargeback locks (freezes) the client's account. Deposits and withdrawals are rejected on locked accounts, but dispute-related operations (dispute, resolve, chargeback) are still processed. Dispute resolution is corrective and administrative — blocking it would leave funds permanently trapped in held balances with no path to resolution.
+
 ## Future Considerations
 
 ### Per-client parallel processing
