@@ -1,5 +1,5 @@
 use crate::{
-    TransactionOperation, TransactionRecord, chargeback, deposit, dispute, resolve, withdraw,
+    chargeback, deposit, dispute, resolve, withdraw, TransactionOperation, TransactionRecord,
 };
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -23,8 +23,16 @@ impl Account {
 pub struct StoredTransaction {
     pub client: u16,
     pub amount: Decimal,
-    pub disputed: bool,
+    pub dispute_state: DisputeState,
     pub is_deposit: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DisputeState {
+    None,
+    Disputed,
+    Resolved,
+    Chargebacked,
 }
 
 pub fn process_transactions(
@@ -365,6 +373,23 @@ mod tests {
         assert_eq!(a2.available, Decimal::ZERO);
         assert_eq!(a2.held, Decimal::ZERO);
         assert!(!a2.locked);
+    }
+
+    #[test]
+    fn dispute_on_chargebacked_tx_is_rejected() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+            make_tx(TransactionOperation::Chargeback, 1, 1, None),
+            // Chargebacked is terminal — re-dispute should be rejected
+            make_tx(TransactionOperation::Dispute, 1, 1, None),
+        ];
+
+        let accounts = process_transactions(transactions.into_iter());
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, Decimal::ZERO);
+        assert!(a1.locked);
     }
 
     #[test]

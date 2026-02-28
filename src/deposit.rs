@@ -1,6 +1,6 @@
 use crate::{
     csv_handler::TransactionRecord,
-    engine::{Account, StoredTransaction},
+    engine::{Account, DisputeState, StoredTransaction},
 };
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -51,7 +51,7 @@ pub fn execute(
         StoredTransaction {
             amount,
             client: transaction.client,
-            disputed: false,
+            dispute_state: DisputeState::None,
             is_deposit: true,
         },
     );
@@ -180,6 +180,6 @@ mod tests {
         let stored = ledger.get(&42).unwrap();
         assert_eq!(stored.client, 1);
         assert_eq!(stored.amount, dec!(10.0));
-        assert!(!stored.disputed);
+        assert_eq!(stored.dispute_state, DisputeState::None);
     }
 }

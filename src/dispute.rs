@@ -1,6 +1,6 @@
 use crate::{
     csv_handler::TransactionRecord,
-    engine::{Account, StoredTransaction},
+    engine::{Account, DisputeState, StoredTransaction},
 };
 use std::collections::HashMap;
 
@@ -28,12 +28,15 @@ pub fn execute(
         return;
     }
 
-    if stored_transaction.disputed {
-        eprintln!(
-            "[client: {}, tx: {}] Dispute rejected: transaction already disputed",
-            transaction.client, transaction.tx
-        );
-        return;
+    match stored_transaction.dispute_state {
+        DisputeState::None | DisputeState::Resolved => {} // eligible for dispute
+        DisputeState::Disputed | DisputeState::Chargebacked => {
+            eprintln!(
+                "[client: {}, tx: {}] Dispute rejected: transaction not eligible (state: {:?})",
+                transaction.client, transaction.tx, stored_transaction.dispute_state
+            );
+            return;
+        }
     }
 
     if !stored_transaction.is_deposit {
@@ -62,7 +65,7 @@ pub fn execute(
     };
     account.available = new_available;
     account.held = new_held;
-    stored_transaction.disputed = true;
+    stored_transaction.dispute_state = DisputeState::Disputed;
 }
 
 #[cfg(test)]
@@ -94,7 +97,7 @@ mod tests {
             StoredTransaction {
                 client,
                 amount,
-                disputed: false,
+                dispute_state: DisputeState::None,
                 is_deposit: true,
             },
         );
@@ -120,7 +123,7 @@ mod tests {
 
         execute(&mut ledger, &mut account, make_dispute(1, 1));
 
-        assert!(ledger.get(&1).unwrap().disputed);
+        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::Disputed);
     }
 
     #[test]
@@ -145,7 +148,7 @@ mod tests {
 
         assert_eq!(account.available, dec!(10.0));
         assert_eq!(account.held, Decimal::ZERO);
-        assert!(!ledger.get(&1).unwrap().disputed);
+        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::None);
     }
 
     #[test]
@@ -172,7 +175,7 @@ mod tests {
             StoredTransaction {
                 client: 1,
                 amount: dec!(5.0),
-                disputed: false,
+                dispute_state: DisputeState::None,
                 is_deposit: false,
             },
         );
@@ -181,7 +184,7 @@ mod tests {
 
         assert_eq!(account.available, dec!(10.0));
         assert_eq!(account.held, Decimal::ZERO);
-        assert!(!ledger.get(&1).unwrap().disputed);
+        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::None);
     }
 
     #[test]
@@ -195,7 +198,7 @@ mod tests {
             StoredTransaction {
                 client: 1,
                 amount: dec!(10.0),
-                disputed: false,
+                dispute_state: DisputeState::None,
                 is_deposit: true,
             },
         );

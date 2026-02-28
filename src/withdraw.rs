@@ -1,6 +1,6 @@
 use crate::{
     csv_handler::TransactionRecord,
-    engine::{Account, StoredTransaction},
+    engine::{Account, DisputeState, StoredTransaction},
 };
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -59,7 +59,7 @@ pub fn execute(
         StoredTransaction {
             amount,
             client: transaction.client,
-            disputed: false,
+            dispute_state: DisputeState::None,
             is_deposit: false,
         },
     );

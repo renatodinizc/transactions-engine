@@ -1,6 +1,6 @@
 use crate::{
     csv_handler::TransactionRecord,
-    engine::{Account, StoredTransaction},
+    engine::{Account, DisputeState, StoredTransaction},
 };
 use std::collections::HashMap;
 
@@ -28,10 +28,10 @@ pub fn execute(
         return;
     }
 
-    if !stored_transaction.disputed {
+    if stored_transaction.dispute_state != DisputeState::Disputed {
         eprintln!(
-            "[client: {}, tx: {}] Chargeback rejected: transaction is not disputed",
-            transaction.client, transaction.tx
+            "[client: {}, tx: {}] Chargeback rejected: transaction is not disputed (state: {:?})",
+            transaction.client, transaction.tx, stored_transaction.dispute_state
         );
         return;
     }
@@ -46,7 +46,7 @@ pub fn execute(
         return;
     };
     account.held = new_held;
-    stored_transaction.disputed = false;
+    stored_transaction.dispute_state = DisputeState::Chargebacked;
     account.locked = true;
 }
 
@@ -79,7 +79,7 @@ mod tests {
             StoredTransaction {
                 client,
                 amount,
-                disputed: true,
+                dispute_state: DisputeState::Disputed,
                 is_deposit: true,
             },
         );
@@ -106,6 +106,19 @@ mod tests {
         execute(&mut ledger, &mut account, make_chargeback(1, 1));
 
         assert!(account.locked);
+    }
+
+    #[test]
+    fn chargeback_transitions_to_chargebacked_state() {
+        let mut ledger = HashMap::new();
+        let mut account = setup_disputed_account(&mut ledger, 1, 1, dec!(10.0));
+
+        execute(&mut ledger, &mut account, make_chargeback(1, 1));
+
+        assert_eq!(
+            ledger.get(&1).unwrap().dispute_state,
+            DisputeState::Chargebacked
+        );
     }
 
     #[test]
@@ -142,7 +155,7 @@ mod tests {
 
         assert_eq!(account.held, dec!(10.0));
         assert!(!account.locked);
-        assert!(ledger.get(&1).unwrap().disputed);
+        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::Disputed);
     }
 
     #[test]
@@ -155,7 +168,7 @@ mod tests {
             StoredTransaction {
                 client: 1,
                 amount: dec!(10.0),
-                disputed: false,
+                dispute_state: DisputeState::None,
                 is_deposit: true,
             },
         );

@@ -96,7 +96,7 @@ fn expected_accounts() -> HashMap<u16, ExpectedAccount> {
         (10, "10", "0", "10", false),
         (11, "10", "0", "10", false),
         (24, "5", "0", "5", false),
-        (27, "-10", "10", "0", true),
+        (27, "0", "0", "0", true),
         (32, "10", "0", "10", false),
         // Bad & malformed data
         (13, "40", "0", "40", false),

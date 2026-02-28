@@ -50,6 +50,25 @@ The spec's dispute mechanics (decrease available, increase held, total unchanged
 
 In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics — reimbursing the client by increasing available and holding the reimbursed amount (available += amount, held += amount) rather than applying the deposit-oriented hold pattern. This is a fundamentally different operation that the spec does not describe, so it is left unimplemented.
 
+### Explicit dispute state machine
+
+The dispute lifecycle is modeled as an explicit state machine (`DisputeState` enum) rather than a boolean flag. Each transaction tracks its dispute state through well-defined transitions:
+
+```
+    None ──────► Disputed ──────► Chargebacked (terminal)
+     ▲              │
+     │              ▼
+     └────────── Resolved
+```
+
+- **None → Disputed**: a valid dispute is filed
+- **Disputed → Resolved**: the dispute is resolved, funds return to available
+- **Disputed → Chargebacked**: the dispute results in a chargeback, funds are removed and the account is locked
+- **Resolved → Disputed**: a previously resolved transaction can be re-disputed
+- **Chargebacked** is a terminal state: once a transaction is chargebacked, no further dispute operations are accepted on it. The funds have already been reversed and the account locked — re-disputing would create phantom held balances from money that no longer exists.
+
+A boolean `disputed` flag would technically work for the spec's requirements, but it conflates "never disputed" with "chargebacked" (both `false`), making the re-dispute-after-chargeback policy implicit rather than explicit. The enum makes every transition a conscious design choice and is self-documenting for reviewers.
+
 ### Disputes can produce negative available balances
 
 If a client deposits funds, withdraws some, and the original deposit is later disputed, the available balance goes negative. This is intentional — a negative available balance accurately represents a liability (the client spent money they may not be entitled to). Blocking the dispute when available is insufficient would create a fraud vector: a malicious actor could deposit, immediately withdraw, and become immune to disputes. Real payment processors (Stripe, PayPal, crypto exchanges) all allow negative balances during disputes and recover through clawback mechanisms on future deposits.
@@ -72,7 +91,7 @@ All rejected operations are logged to stderr with a consistent format: `[client:
 
 ## Sample Data
 
-The file `sample_transactions.csv` contains a comprehensive test dataset generated with AI assistance. It covers 41 clients across 247 transactions, exercising every operation type, edge case, and error condition. Transactions from different clients are interleaved to simulate realistic concurrent activity while maintaining chronological order per client.
+The file `sample_transactions.csv` contains a comprehensive test dataset generated with AI assistance. It covers 45 clients across 261 transactions, exercising every operation type, edge case, and error condition. Transactions from different clients are interleaved to simulate realistic concurrent activity while maintaining chronological order per client.
 
 ### Basic operations & spec reference
 
@@ -114,7 +133,7 @@ The file `sample_transactions.csv` contains a comprehensive test dataset generat
 | 10 | Duplicate deposit tx ID rejected | deposit → deposit same tx (rejected) | avail=10 |
 | 11 | Dispute before deposit exists | dispute (ignored) → deposit | avail=10 |
 | 24 | Duplicate tx IDs across deposit/withdrawal | deposit → deposit same tx (rejected) → withdrawal → deposit same tx as withdrawal (rejected) | avail=5 |
-| 27 | Re-dispute after chargeback | deposit → dispute → chargeback → resolve (ignored) → dispute (succeeds) | avail=-10, held=10, locked |
+| 27 | Re-dispute after chargeback rejected | deposit → dispute → chargeback → resolve (rejected) → dispute (rejected, chargebacked is terminal) | avail=0, locked |
 | 32 | Dispute/resolve/chargeback on nonexistent txs | deposit → dispute/resolve/chargeback on missing tx IDs (all ignored) | avail=10 |
 
 ### Bad & malformed data
@@ -139,7 +158,7 @@ The file `sample_transactions.csv` contains a comprehensive test dataset generat
 These clients simulate realistic account lifecycles with multiple rounds of normal operations interspersed with dispute cycles. Their transactions are interleaved across clients to simulate concurrent activity.
 
 **Client 42** — Normal ops → dispute resolved → more ops → dispute chargebacked → post-lock activity
-- Deposits and withdrawals build up activity, first dispute on a 200 deposit is resolved, operations continue, then a 500 deposit is disputed and chargebacked leaving negative balance. After lock: multiple deposits and withdrawals rejected, a previous deposit is re-disputed and resolved (dispute resolution still works on locked accounts), more deposits/withdrawals rejected.
+- Deposits and withdrawals build up activity, first dispute on a 200 deposit is resolved, operations continue, then a 500 deposit is disputed and chargebacked leaving negative balance. Re-dispute on the chargebacked transaction is rejected (chargebacked is terminal). After lock: multiple deposits and withdrawals rejected, a previous deposit is re-disputed and resolved (dispute resolution still works on locked accounts), more deposits/withdrawals rejected.
 - Expected: avail=-75, locked
 
 **Client 43** — Normal ops → dispute resolved → normal ops → chargeback → dispute activity on locked → post-lock rejections

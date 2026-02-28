@@ -1,10 +1,9 @@
+use crate::engine::Account;
 use csv::ReaderBuilder;
 use eserde::Deserialize;
 use rust_decimal::Decimal;
 use serde::Serialize;
 use std::{collections::HashMap, io};
-
-use crate::engine::Account;
 
 #[derive(Deserialize, Debug)]
 pub struct TransactionRecord {
