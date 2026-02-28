@@ -13,10 +13,11 @@ pub fn execute(
     let amount = match transaction.amount {
         Some(a) if a > Decimal::ZERO => a,
         _ => {
-            return eprintln!(
+            eprintln!(
                 "not a valid amount number to deposit: {:?}",
                 transaction.amount
             );
+            return;
         }
     };
 

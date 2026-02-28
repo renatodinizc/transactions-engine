@@ -34,31 +34,23 @@ pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16
     let mut stored_transactions: HashMap<u32, StoredTransaction> = HashMap::new();
 
     for transaction in transactions {
+        let client_account = client_accounts.entry(transaction.client).or_default();
+
         match transaction.operation {
             TransactionOperation::Deposit => {
-                let client_account = client_accounts.entry(transaction.client).or_default();
-
-                deposit::execute(&mut stored_transactions, client_account, transaction);
+                deposit::execute(&mut stored_transactions, client_account, transaction)
             }
             TransactionOperation::Withdrawal => {
-                let client_account = client_accounts.entry(transaction.client).or_default();
-
-                withdraw::execute(&mut stored_transactions, client_account, transaction);
+                withdraw::execute(&mut stored_transactions, client_account, transaction)
             }
             TransactionOperation::Dispute => {
-                let client_account = client_accounts.entry(transaction.client).or_default();
-
-                dispute::execute(&mut stored_transactions, client_account, transaction);
+                dispute::execute(&mut stored_transactions, client_account, transaction)
             }
             TransactionOperation::Resolve => {
-                let client_account = client_accounts.entry(transaction.client).or_default();
-
-                resolve::execute(&mut stored_transactions, client_account, transaction);
+                resolve::execute(&mut stored_transactions, client_account, transaction)
             }
             TransactionOperation::Chargeback => {
-                let client_account = client_accounts.entry(transaction.client).or_default();
-
-                chargeback::execute(&mut stored_transactions, client_account, transaction);
+                chargeback::execute(&mut stored_transactions, client_account, transaction)
             }
         }
     }

@@ -24,6 +24,8 @@ This design choice prioritizes:
 
 Module boundaries define the architecture, following Rust's model where encapsulation comes from modules, not struct boundaries.
 
+Each operation (deposit, withdraw, dispute, resolve, chargeback) lives in its own module despite being a single public function. This is deliberate: each operation carries 5-7 unit tests covering its edge cases. Consolidating everything into `engine.rs` would produce a large file where orchestration logic and operation-specific test coverage are interleaved. The current structure keeps the engine focused on wiring and dispatch, while each operation module owns its validation rules and test suite independently.
+
 ## Design Decisions
 
 ### Dependency choices

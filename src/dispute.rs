@@ -7,48 +7,48 @@ use std::collections::HashMap;
 pub fn execute(
     stored_transactions: &mut HashMap<u32, StoredTransaction>,
     account: &mut Account,
-    current_transaction: TransactionRecord,
+    transaction: TransactionRecord,
 ) {
-    let disputed_transaction = match stored_transactions.get_mut(&current_transaction.tx) {
+    let stored_transaction = match stored_transactions.get_mut(&transaction.tx) {
         Some(transaction) => transaction,
         None => {
             eprintln!(
                 "Could not find stored transaction for related dispute: {}",
-                &current_transaction.tx
+                &transaction.tx
             );
             return;
         }
     };
 
-    if disputed_transaction.client != current_transaction.client {
+    if stored_transaction.client != transaction.client {
         eprintln!(
             "The dispute's transaction is not from the same client. Disputed transaction's client {}, current client: {}",
-            disputed_transaction.client, current_transaction.client
+            stored_transaction.client, transaction.client
         );
         return;
     }
 
-    if disputed_transaction.disputed {
+    if stored_transaction.disputed {
         eprintln!(
             "A dispute is already undergoing for the transaction {}.",
-            current_transaction.tx
+            transaction.tx
         );
         return;
     }
 
-    if !disputed_transaction.is_deposit {
+    if !stored_transaction.is_deposit {
         eprintln!(
             "The disputed operation is not a deposit and should be ignored. Related transaction tx: {}.",
-            current_transaction.tx
+            transaction.tx
         );
         return;
     }
 
     // From here onwards the dispute is considered valid
 
-    account.available -= disputed_transaction.amount;
-    account.held += disputed_transaction.amount;
-    disputed_transaction.disputed = true;
+    account.available -= stored_transaction.amount;
+    account.held += stored_transaction.amount;
+    stored_transaction.disputed = true;
 }
 
 #[cfg(test)]
