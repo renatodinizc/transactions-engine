@@ -20,8 +20,10 @@ fn main() {
 
     let client_accounts = engine::process_transactions(transactions);
 
-    for client in client_accounts.keys() {
-        println!("client: {client}");
-        println!("account: {:?}", client_accounts.get(client));
-    }
+    csv_handler::write_accounts(client_accounts)
+        .map_err(|err| {
+            eprintln!("Error writing CSV: {err}");
+            process::exit(1)
+        })
+        .unwrap();
 }
