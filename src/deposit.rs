@@ -3,10 +3,11 @@ use crate::{
     engine::{Account, DisputeState, StoredTransaction},
 };
 use rust_decimal::Decimal;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub fn execute(
-    stored_transactions: &mut HashMap<u32, StoredTransaction>,
+    deposit_ledger: &mut HashMap<u32, StoredTransaction>,
+    withdrawal_ids: &HashSet<u32>,
     account: &mut Account,
     transaction: TransactionRecord,
 ) {
@@ -29,7 +30,7 @@ pub fn execute(
         return;
     }
 
-    if stored_transactions.contains_key(&transaction.tx) {
+    if deposit_ledger.contains_key(&transaction.tx) || withdrawal_ids.contains(&transaction.tx) {
         eprintln!(
             "[client: {}, tx: {}] Deposit rejected: duplicate transaction ID",
             transaction.client, transaction.tx
@@ -46,13 +47,12 @@ pub fn execute(
     };
     account.available = new_available;
 
-    stored_transactions.insert(
+    deposit_ledger.insert(
         transaction.tx,
         StoredTransaction {
             amount,
             client: transaction.client,
             dispute_state: DisputeState::None,
-            is_deposit: true,
         },
     );
 }
@@ -75,9 +75,11 @@ mod tests {
     #[test]
     fn deposit_increases_available() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 1, Some(dec!(10.0))),
         );
@@ -88,14 +90,17 @@ mod tests {
     #[test]
     fn multiple_deposits_accumulate() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 1, Some(dec!(1.1111))),
         );
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 2, Some(dec!(2.2222))),
         );
@@ -105,17 +110,25 @@ mod tests {
     #[test]
     fn deposit_with_none_amount_is_ignored() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
-        execute(&mut ledger, &mut account, make_deposit(1, 1, None));
+        execute(
+            &mut ledger,
+            &withdrawal_ids,
+            &mut account,
+            make_deposit(1, 1, None),
+        );
         assert_eq!(account.available, Decimal::ZERO);
     }
 
     #[test]
     fn deposit_with_zero_amount_is_ignored() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 1, Some(Decimal::ZERO)),
         );
@@ -125,9 +138,11 @@ mod tests {
     #[test]
     fn deposit_with_negative_amount_is_ignored() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 1, Some(dec!(-5.0))),
         );
@@ -137,10 +152,12 @@ mod tests {
     #[test]
     fn deposit_on_locked_account_is_ignored() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.locked = true;
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 1, Some(dec!(10.0))),
         );
@@ -150,9 +167,11 @@ mod tests {
     #[test]
     fn deposit_overflow_is_rejected() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 1, Some(Decimal::MAX)),
         );
@@ -161,6 +180,7 @@ mod tests {
         // Second deposit should be rejected due to overflow
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 2, Some(dec!(1.0))),
         );
@@ -171,9 +191,11 @@ mod tests {
     #[test]
     fn deposit_stores_transaction_in_ledger() {
         let mut ledger = HashMap::new();
+        let withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         execute(
             &mut ledger,
+            &withdrawal_ids,
             &mut account,
             make_deposit(1, 42, Some(dec!(10.0))),
         );

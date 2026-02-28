@@ -53,7 +53,7 @@ I chose skipping over aborting because:
 
 ### Disputes only apply to deposits
 
-The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would double-penalize the client: funds were already debited during the withdrawal, and the dispute would decrease available *again* by the same amount — effectively charging the client twice for a transaction they're claiming was erroneous. Both deposits and withdrawals are stored in a shared transaction ledger, but each entry carries an `is_deposit` flag. Disputes check this flag and reject any attempt to dispute a non-deposit transaction.
+The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would double-penalize the client: funds were already debited during the withdrawal, and the dispute would decrease available *again* by the same amount — effectively charging the client twice for a transaction they're claiming was erroneous. Only deposits are stored in the transaction ledger (`HashMap<u32, StoredTransaction>`); withdrawals record only their transaction ID in a `HashSet<u32>` for duplicate detection. This means disputes naturally only apply to deposits — attempting to dispute a withdrawal tx ID simply finds no entry in the ledger.
 
 In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics — reimbursing the client by increasing available and holding the reimbursed amount (available += amount, held += amount) rather than applying the deposit-oriented hold pattern. This is a fundamentally different operation that the spec does not describe, so it is left unimplemented.
 
@@ -197,11 +197,11 @@ Currently only rejected operations are logged to stderr. In production, successf
 
 Transactions for different clients are independent and could be parallelized by grouping transactions per client and processing each group concurrently (e.g., using Tokio tasks). I kept sequential processing for simplicity and because the spec prioritizes maintainability over efficiency, but the architecture supports this optimization since client accounts are fully isolated from each other.
 
-### Memory-efficient transaction storage
+### Production-grade transaction storage
 
-Currently every successful deposit and withdrawal is stored in a `HashMap<u32, StoredTransaction>` for the lifetime of the program. In-process HashMaps are appropriate for this toy engine, but a production system would not hold transaction state in application memory at all. Instead, it would use a fast in-memory database like Redis as a reference store for hot transaction lookups (dispute-eligible, recently created), backed by a persistent datastore (e.g., PostgreSQL) for the full ledger. This decouples transaction state from application lifecycle, enables horizontal scaling across multiple engine instances, and eliminates the risk of data loss on process crash.
+In-process HashMaps are appropriate for this toy engine, but a production system would not hold transaction state in application memory at all. Instead, it would use a fast in-memory database like Redis as a reference store for hot transaction lookups (dispute-eligible, recently created), backed by a persistent datastore (e.g., PostgreSQL) for the full ledger. This decouples transaction state from application lifecycle, enables horizontal scaling across multiple engine instances, and eliminates the risk of data loss on process crash.
 
-Within the current in-memory design, two optimizations could reduce footprint: evicting old, undisputed transactions after a configurable dispute window expires, and using a lightweight `HashSet<u32>` for duplicate transaction ID detection instead of storing full `StoredTransaction` entries for withdrawals (which cannot be disputed).
+Within the current in-memory design, a further optimization could reduce footprint: evicting old, undisputed transactions after a configurable dispute window expires.
 
 ### Rust edition
 

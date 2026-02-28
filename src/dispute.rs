@@ -5,11 +5,11 @@ use crate::{
 use std::collections::HashMap;
 
 pub fn execute(
-    stored_transactions: &mut HashMap<u32, StoredTransaction>,
+    deposit_ledger: &mut HashMap<u32, StoredTransaction>,
     account: &mut Account,
     transaction: TransactionRecord,
 ) {
-    let stored_transaction = match stored_transactions.get_mut(&transaction.tx) {
+    let stored_transaction = match deposit_ledger.get_mut(&transaction.tx) {
         Some(transaction) => transaction,
         None => {
             eprintln!(
@@ -37,14 +37,6 @@ pub fn execute(
             );
             return;
         }
-    }
-
-    if !stored_transaction.is_deposit {
-        eprintln!(
-            "[client: {}, tx: {}] Dispute rejected: transaction is not a deposit",
-            transaction.client, transaction.tx
-        );
-        return;
     }
 
     // From here onwards the dispute is considered valid
@@ -98,7 +90,6 @@ mod tests {
                 client,
                 amount,
                 dispute_state: DisputeState::None,
-                is_deposit: true,
             },
         );
         account
@@ -169,28 +160,6 @@ mod tests {
     }
 
     #[test]
-    fn dispute_on_withdrawal_is_rejected() {
-        let mut ledger = HashMap::new();
-        let mut account = Account::default();
-        account.available = dec!(10.0);
-        ledger.insert(
-            1,
-            StoredTransaction {
-                client: 1,
-                amount: dec!(5.0),
-                dispute_state: DisputeState::None,
-                is_deposit: false,
-            },
-        );
-
-        execute(&mut ledger, &mut account, make_dispute(1, 1));
-
-        assert_eq!(account.available, dec!(10.0));
-        assert_eq!(account.held, Decimal::ZERO);
-        assert_eq!(ledger.get(&1).unwrap().dispute_state, DisputeState::None);
-    }
-
-    #[test]
     fn dispute_partial_balance() {
         let mut ledger = HashMap::new();
         // Account has 20, but the disputed deposit was only 10
@@ -202,7 +171,6 @@ mod tests {
                 client: 1,
                 amount: dec!(10.0),
                 dispute_state: DisputeState::None,
-                is_deposit: true,
             },
         );
 

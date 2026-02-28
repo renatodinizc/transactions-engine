@@ -1,12 +1,13 @@
 use crate::{
     csv_handler::TransactionRecord,
-    engine::{Account, DisputeState, StoredTransaction},
+    engine::{Account, StoredTransaction},
 };
 use rust_decimal::Decimal;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub fn execute(
-    stored_transactions: &mut HashMap<u32, StoredTransaction>,
+    deposit_ledger: &HashMap<u32, StoredTransaction>,
+    withdrawal_ids: &mut HashSet<u32>,
     account: &mut Account,
     transaction: TransactionRecord,
 ) {
@@ -29,7 +30,7 @@ pub fn execute(
         return;
     }
 
-    if stored_transactions.contains_key(&transaction.tx) {
+    if deposit_ledger.contains_key(&transaction.tx) || withdrawal_ids.contains(&transaction.tx) {
         eprintln!(
             "[client: {}, tx: {}] Withdrawal rejected: duplicate transaction ID",
             transaction.client, transaction.tx
@@ -54,15 +55,7 @@ pub fn execute(
     };
     account.available = new_available;
 
-    stored_transactions.insert(
-        transaction.tx,
-        StoredTransaction {
-            amount,
-            client: transaction.client,
-            dispute_state: DisputeState::None,
-            is_deposit: false,
-        },
-    );
+    withdrawal_ids.insert(transaction.tx);
 }
 
 #[cfg(test)]
@@ -82,11 +75,13 @@ mod tests {
 
     #[test]
     fn withdrawal_decreases_available() {
-        let mut ledger = HashMap::new();
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(10.0);
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 1, Some(dec!(3.0))),
         );
@@ -95,11 +90,13 @@ mod tests {
 
     #[test]
     fn withdrawal_with_insufficient_funds_is_rejected() {
-        let mut ledger = HashMap::new();
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(2.0);
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 1, Some(dec!(3.0))),
         );
@@ -108,11 +105,13 @@ mod tests {
 
     #[test]
     fn withdrawal_of_exact_balance_succeeds() {
-        let mut ledger = HashMap::new();
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(5.0);
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 1, Some(dec!(5.0))),
         );
@@ -121,20 +120,28 @@ mod tests {
 
     #[test]
     fn withdrawal_with_none_amount_is_ignored() {
-        let mut ledger = HashMap::new();
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(10.0);
-        execute(&mut ledger, &mut account, make_withdrawal(1, 1, None));
+        execute(
+            &ledger,
+            &mut withdrawal_ids,
+            &mut account,
+            make_withdrawal(1, 1, None),
+        );
         assert_eq!(account.available, dec!(10.0));
     }
 
     #[test]
     fn withdrawal_with_negative_amount_is_ignored() {
-        let mut ledger = HashMap::new();
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(10.0);
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 1, Some(dec!(-5.0))),
         );
@@ -143,12 +150,14 @@ mod tests {
 
     #[test]
     fn withdrawal_on_locked_account_is_ignored() {
-        let mut ledger = HashMap::new();
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(10.0);
         account.locked = true;
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 1, Some(dec!(5.0))),
         );
@@ -156,31 +165,32 @@ mod tests {
     }
 
     #[test]
-    fn withdrawal_stores_transaction_in_ledger() {
-        let mut ledger = HashMap::new();
+    fn withdrawal_records_tx_id() {
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(10.0);
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 42, Some(dec!(3.0))),
         );
-        let stored = ledger.get(&42).unwrap();
-        assert_eq!(stored.client, 1);
-        assert_eq!(stored.amount, dec!(3.0));
-        assert!(!stored.is_deposit);
+        assert!(withdrawal_ids.contains(&42));
     }
 
     #[test]
-    fn failed_withdrawal_does_not_store_in_ledger() {
-        let mut ledger = HashMap::new();
+    fn failed_withdrawal_does_not_record_tx_id() {
+        let ledger = HashMap::new();
+        let mut withdrawal_ids = HashSet::new();
         let mut account = Account::default();
         account.available = dec!(2.0);
         execute(
-            &mut ledger,
+            &ledger,
+            &mut withdrawal_ids,
             &mut account,
             make_withdrawal(1, 1, Some(dec!(5.0))),
         );
-        assert!(ledger.get(&1).is_none());
+        assert!(!withdrawal_ids.contains(&1));
     }
 }

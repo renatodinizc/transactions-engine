@@ -80,7 +80,6 @@ mod tests {
                 client,
                 amount,
                 dispute_state: DisputeState::Disputed,
-                is_deposit: true,
             },
         );
         account
@@ -172,7 +171,6 @@ mod tests {
                 client: 1,
                 amount: dec!(10.0),
                 dispute_state: DisputeState::None,
-                is_deposit: true,
             },
         );
 

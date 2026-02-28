@@ -2,7 +2,7 @@ use crate::{
     chargeback, deposit, dispute, resolve, withdraw, TransactionOperation, TransactionRecord,
 };
 use rust_decimal::Decimal;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct Account {
@@ -24,7 +24,6 @@ pub struct StoredTransaction {
     pub client: u16,
     pub amount: Decimal,
     pub dispute_state: DisputeState,
-    pub is_deposit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,26 +40,33 @@ pub fn process_transactions(
     // Storing accounts in a hashmap permits O(1) lookups instead
     // of using Vec<ClientAccount> which would do an O(n) lookup.
     let mut client_accounts: HashMap<u16, Account> = HashMap::new();
-    let mut stored_transactions: HashMap<u32, StoredTransaction> = HashMap::new();
+    let mut deposit_ledger: HashMap<u32, StoredTransaction> = HashMap::new();
+    let mut withdrawal_ids: HashSet<u32> = HashSet::new();
 
     for transaction in transactions {
         let client_account = client_accounts.entry(transaction.client).or_default();
 
         match transaction.operation {
-            TransactionOperation::Deposit => {
-                deposit::execute(&mut stored_transactions, client_account, transaction)
-            }
-            TransactionOperation::Withdrawal => {
-                withdraw::execute(&mut stored_transactions, client_account, transaction)
-            }
+            TransactionOperation::Deposit => deposit::execute(
+                &mut deposit_ledger,
+                &withdrawal_ids,
+                client_account,
+                transaction,
+            ),
+            TransactionOperation::Withdrawal => withdraw::execute(
+                &deposit_ledger,
+                &mut withdrawal_ids,
+                client_account,
+                transaction,
+            ),
             TransactionOperation::Dispute => {
-                dispute::execute(&mut stored_transactions, client_account, transaction)
+                dispute::execute(&mut deposit_ledger, client_account, transaction)
             }
             TransactionOperation::Resolve => {
-                resolve::execute(&mut stored_transactions, client_account, transaction)
+                resolve::execute(&mut deposit_ledger, client_account, transaction)
             }
             TransactionOperation::Chargeback => {
-                chargeback::execute(&mut stored_transactions, client_account, transaction)
+                chargeback::execute(&mut deposit_ledger, client_account, transaction)
             }
         }
     }
