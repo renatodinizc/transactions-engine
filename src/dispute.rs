@@ -12,7 +12,7 @@ pub fn execute(
     let disputed_transaction = match stored_transactions.get_mut(&current_transaction.tx) {
         Some(transaction) => transaction,
         None => {
-            println!(
+            eprintln!(
                 "Could not find stored transaction for related dispute: {}",
                 &current_transaction.tx
             );
@@ -21,7 +21,7 @@ pub fn execute(
     };
 
     if disputed_transaction.client != current_transaction.client {
-        println!(
+        eprintln!(
             "The dispute's transaction is not from the same client. Disputed transaction's client {}, current client: {}",
             disputed_transaction.client, current_transaction.client
         );
@@ -29,7 +29,7 @@ pub fn execute(
     }
 
     if disputed_transaction.disputed {
-        println!(
+        eprintln!(
             "A dispute is already undergoing for the transaction {}.",
             current_transaction.tx
         );

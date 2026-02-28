@@ -1,4 +1,4 @@
-use crate::{TransactionOperation, TransactionRecord, deposit, dispute, withdraw};
+use crate::{TransactionOperation, TransactionRecord, deposit, dispute, resolve, withdraw};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
@@ -27,31 +27,36 @@ pub struct StoredTransaction {
 pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16, Account> {
     // Storing accounts in a hashmap permits O(1) lookups instead
     // of using Vec<ClientAccount> which would do an O(n) lookup.
-    let mut all_client_accounts: HashMap<u16, Account> = HashMap::new();
+    let mut client_accounts: HashMap<u16, Account> = HashMap::new();
     let mut stored_transactions: HashMap<u32, StoredTransaction> = HashMap::new();
 
     for transaction in transactions {
         match transaction.operation {
             TransactionOperation::Deposit => {
-                let client_account = all_client_accounts.entry(transaction.client).or_default();
+                let client_account = client_accounts.entry(transaction.client).or_default();
 
                 deposit::execute(&mut stored_transactions, client_account, transaction);
             }
             TransactionOperation::Withdrawal => {
-                let client_account = all_client_accounts.entry(transaction.client).or_default();
+                let client_account = client_accounts.entry(transaction.client).or_default();
 
                 withdraw::execute(client_account, transaction.amount);
             }
             TransactionOperation::Dispute => {
-                let client_account = all_client_accounts.entry(transaction.client).or_default();
+                let client_account = client_accounts.entry(transaction.client).or_default();
 
                 dispute::execute(&mut stored_transactions, client_account, transaction);
+            }
+            TransactionOperation::Resolve => {
+                let client_account = client_accounts.entry(transaction.client).or_default();
+
+                resolve::execute(&mut stored_transactions, client_account, transaction);
             }
             _ => println!("Operation not implemented yet."),
         }
     }
 
-    all_client_accounts
+    client_accounts
 }
 
 #[cfg(test)]
