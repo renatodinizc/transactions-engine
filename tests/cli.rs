@@ -54,7 +54,11 @@ fn empty_input_file_succeeds() {
         "Should handle empty input gracefully"
     );
     let stdout = from_utf8(&output.stdout).unwrap();
-    assert!(stdout.trim().is_empty(), "No clients means no output rows");
+    assert_eq!(
+        stdout.trim(),
+        "client,available,held,total,locked",
+        "Empty input should produce header-only output"
+    );
 
     let _ = std::fs::remove_file(&path);
 }

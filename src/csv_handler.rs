@@ -73,7 +73,11 @@ impl PrintedAccount {
 }
 
 pub fn write_accounts(accounts: HashMap<u16, Account>) -> Result<(), csv::Error> {
-    let mut writer = csv::Writer::from_writer(io::stdout());
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(io::stdout());
+    // Write header manually so it's emitted even when there are no accounts
+    writer.write_record(["client", "available", "held", "total", "locked"])?;
 
     for (client, account) in accounts {
         let printed_account = PrintedAccount::new(client, account);
