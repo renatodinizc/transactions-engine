@@ -37,7 +37,14 @@ pub fn execute(
         return;
     }
 
-    account.available += amount;
+    let Some(new_available) = account.available.checked_add(amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Deposit rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    account.available = new_available;
 
     stored_transactions.insert(
         transaction.tx,
@@ -138,6 +145,27 @@ mod tests {
             make_deposit(1, 1, Some(dec!(10.0))),
         );
         assert_eq!(account.available, Decimal::ZERO);
+    }
+
+    #[test]
+    fn deposit_overflow_is_rejected() {
+        let mut ledger = HashMap::new();
+        let mut account = Account::default();
+        execute(
+            &mut ledger,
+            &mut account,
+            make_deposit(1, 1, Some(Decimal::MAX)),
+        );
+        assert_eq!(account.available, Decimal::MAX);
+
+        // Second deposit should be rejected due to overflow
+        execute(
+            &mut ledger,
+            &mut account,
+            make_deposit(1, 2, Some(dec!(1.0))),
+        );
+        assert_eq!(account.available, Decimal::MAX);
+        assert!(!ledger.contains_key(&2));
     }
 
     #[test]

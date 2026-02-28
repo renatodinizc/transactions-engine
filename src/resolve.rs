@@ -38,8 +38,22 @@ pub fn execute(
 
     // From here onwards the resolve is considered valid
 
-    account.held -= stored_transaction.amount;
-    account.available += stored_transaction.amount;
+    let Some(new_held) = account.held.checked_sub(stored_transaction.amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Resolve rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    let Some(new_available) = account.available.checked_add(stored_transaction.amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Resolve rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    account.held = new_held;
+    account.available = new_available;
     stored_transaction.disputed = false;
 }
 

@@ -37,24 +37,32 @@ pub fn execute(
         return;
     }
 
-    if account.available >= amount {
-        account.available -= amount;
-
-        stored_transactions.insert(
-            transaction.tx,
-            StoredTransaction {
-                amount,
-                client: transaction.client,
-                disputed: false,
-                is_deposit: false,
-            },
-        );
-    } else {
+    if account.available < amount {
         eprintln!(
             "[client: {}, tx: {}] Withdrawal rejected: insufficient funds (available: {}, requested: {})",
             transaction.client, transaction.tx, account.available, amount
-        )
+        );
+        return;
     }
+
+    let Some(new_available) = account.available.checked_sub(amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Withdrawal rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    account.available = new_available;
+
+    stored_transactions.insert(
+        transaction.tx,
+        StoredTransaction {
+            amount,
+            client: transaction.client,
+            disputed: false,
+            is_deposit: false,
+        },
+    );
 }
 
 #[cfg(test)]

@@ -42,6 +42,20 @@ fn nonexistent_file_exits_with_error() {
     assert!(stderr.contains("[system]"));
 }
 
+#[test]
+fn empty_input_file_succeeds() {
+    let path = std::env::temp_dir().join("tx_engine_test_empty.csv");
+    std::fs::write(&path, "type, client, tx, amount\n").unwrap();
+
+    let output = run_engine(&[path.to_str().unwrap()]);
+
+    assert!(output.status.success(), "Should handle empty input gracefully");
+    let stdout = from_utf8(&output.stdout).unwrap();
+    assert!(stdout.trim().is_empty(), "No clients means no output rows");
+
+    let _ = std::fs::remove_file(&path);
+}
+
 // ── Full pipeline integration ──────────────────────────────────────
 
 struct ExpectedAccount {

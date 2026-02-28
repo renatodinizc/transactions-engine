@@ -46,8 +46,22 @@ pub fn execute(
 
     // From here onwards the dispute is considered valid
 
-    account.available -= stored_transaction.amount;
-    account.held += stored_transaction.amount;
+    let Some(new_available) = account.available.checked_sub(stored_transaction.amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Dispute rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    let Some(new_held) = account.held.checked_add(stored_transaction.amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Dispute rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    account.available = new_available;
+    account.held = new_held;
     stored_transaction.disputed = true;
 }
 
@@ -146,6 +160,28 @@ mod tests {
         // Should only have moved funds once
         assert_eq!(account.available, Decimal::ZERO);
         assert_eq!(account.held, dec!(10.0));
+    }
+
+    #[test]
+    fn dispute_on_withdrawal_is_rejected() {
+        let mut ledger = HashMap::new();
+        let mut account = Account::default();
+        account.available = dec!(10.0);
+        ledger.insert(
+            1,
+            StoredTransaction {
+                client: 1,
+                amount: dec!(5.0),
+                disputed: false,
+                is_deposit: false,
+            },
+        );
+
+        execute(&mut ledger, &mut account, make_dispute(1, 1));
+
+        assert_eq!(account.available, dec!(10.0));
+        assert_eq!(account.held, Decimal::ZERO);
+        assert!(!ledger.get(&1).unwrap().disputed);
     }
 
     #[test]

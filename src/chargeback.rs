@@ -38,7 +38,14 @@ pub fn execute(
 
     // From here onwards the chargeback is considered valid
 
-    account.held -= stored_transaction.amount;
+    let Some(new_held) = account.held.checked_sub(stored_transaction.amount) else {
+        eprintln!(
+            "[client: {}, tx: {}] Chargeback rejected: arithmetic overflow",
+            transaction.client, transaction.tx
+        );
+        return;
+    };
+    account.held = new_held;
     stored_transaction.disputed = false;
     account.locked = true;
 }

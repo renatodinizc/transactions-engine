@@ -46,9 +46,9 @@ I chose skipping over aborting because:
 
 ### Disputes only apply to deposits
 
-The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would further decrease available on an account that already lost funds. Both deposits and withdrawals are stored in a shared transaction ledger, but each entry carries an `is_deposit` flag. Disputes check this flag and reject any attempt to dispute a non-deposit transaction.
+The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would double-penalize the client: funds were already debited during the withdrawal, and the dispute would decrease available *again* by the same amount — effectively charging the client twice for a transaction they're claiming was erroneous. Both deposits and withdrawals are stored in a shared transaction ledger, but each entry carries an `is_deposit` flag. Disputes check this flag and reject any attempt to dispute a non-deposit transaction.
 
-In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics -- reversing the withdrawal by increasing available rather than holding funds.
+In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics — reimbursing the client by increasing available and holding the reimbursed amount (available += amount, held += amount) rather than applying the deposit-oriented hold pattern. This is a fundamentally different operation that the spec does not describe, so it is left unimplemented.
 
 ### Disputes can produce negative available balances
 
@@ -61,6 +61,10 @@ If a deposit or withdrawal arrives with a transaction ID that already exists in 
 ### Locked accounts block deposits and withdrawals, not dispute resolution
 
 A chargeback locks (freezes) the client's account. Deposits and withdrawals are rejected on locked accounts, but dispute-related operations (dispute, resolve, chargeback) are still processed. Dispute resolution is corrective and administrative — blocking it would leave funds permanently trapped in held balances with no path to resolution.
+
+### Accounts are created for all referenced clients
+
+The engine creates an account record whenever a transaction references a client ID, regardless of whether the operation succeeds. This means a client who only appears in failed operations (e.g., a rejected dispute) will show up in the output with zero balances. This follows the spec's assumption that "transactions reference clients — if a client doesn't exist create a new record," and preserves a complete audit trail of all clients who interacted with the system, even if their operations were rejected.
 
 ### Structured error logging
 
@@ -166,3 +170,13 @@ Currently only rejected operations are logged to stderr. In production, successf
 ### Per-client parallel processing
 
 Transactions for different clients are independent and could be parallelized by grouping transactions per client and processing each group concurrently (e.g., using Tokio tasks). I kept sequential processing for simplicity and because the spec prioritizes maintainability over efficiency, but the architecture supports this optimization since client accounts are fully isolated from each other.
+
+### Memory-efficient transaction storage
+
+Currently every successful deposit and withdrawal is stored in a `HashMap<u32, StoredTransaction>` for the lifetime of the program. In-process HashMaps are appropriate for this toy engine, but a production system would not hold transaction state in application memory at all. Instead, it would use a fast in-memory database like Redis as a reference store for hot transaction lookups (dispute-eligible, recently created), backed by a persistent datastore (e.g., PostgreSQL) for the full ledger. This decouples transaction state from application lifecycle, enables horizontal scaling across multiple engine instances, and eliminates the risk of data loss on process crash.
+
+Within the current in-memory design, two optimizations could reduce footprint: evicting old, undisputed transactions after a configurable dispute window expires, and using a lightweight `HashSet<u32>` for duplicate transaction ID detection instead of storing full `StoredTransaction` entries for withdrawals (which cannot be disputed).
+
+### Rust edition
+
+This project uses Rust edition 2021 rather than the latest 2024 edition. The codebase does not rely on any 2024-specific features, and using 2021 ensures compatibility with a broader range of toolchains (Rust 1.56+), reducing friction for reviewers who may not have the latest compiler installed.

@@ -348,6 +348,26 @@ mod tests {
     }
 
     #[test]
+    fn failed_operation_still_creates_client_account() {
+        let transactions = vec![
+            make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
+            // Client 2 disputes a nonexistent tx — operation fails
+            make_tx(TransactionOperation::Dispute, 2, 99, None),
+        ];
+
+        let accounts = process_transactions(transactions.into_iter());
+
+        let a1 = accounts.get(&1).unwrap();
+        assert_eq!(a1.available, dec!(10.0));
+
+        // Client 2 should exist with zero balances (created on transaction reference)
+        let a2 = accounts.get(&2).unwrap();
+        assert_eq!(a2.available, Decimal::ZERO);
+        assert_eq!(a2.held, Decimal::ZERO);
+        assert!(!a2.locked);
+    }
+
+    #[test]
     fn resolve_on_already_chargebacked_tx_is_ignored() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),

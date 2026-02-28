@@ -11,19 +11,18 @@ fn main() {
 
     let user_input = &args[1];
 
-    let transactions = csv_handler::read_and_parse(user_input)
-        .map_err(|err| {
+    let transactions = match csv_handler::read_and_parse(user_input) {
+        Ok(t) => t,
+        Err(err) => {
             eprintln!("[system] Error reading CSV: {err}");
-            process::exit(1)
-        })
-        .unwrap();
+            process::exit(1);
+        }
+    };
 
     let client_accounts = engine::process_transactions(transactions);
 
-    csv_handler::write_accounts(client_accounts)
-        .map_err(|err| {
-            eprintln!("[system] Error writing CSV: {err}");
-            process::exit(1)
-        })
-        .unwrap();
+    if let Err(err) = csv_handler::write_accounts(client_accounts) {
+        eprintln!("[system] Error writing CSV: {err}");
+        process::exit(1);
+    }
 }
