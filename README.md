@@ -10,7 +10,14 @@ cargo run -- transactions.csv
 
 ## AI Usage Declaration
 
-I used Claude as a pair-programming partner throughout this project for architectural discussion, code review, and guidance on edge cases. Key decisions like module structure, error handling strategy and dependency choices were mine, informed by discussion with the AI.
+I used Claude (Anthropic) as a pair-programming partner throughout this project. Specifically:
+
+- **Architecture & design**: discussed module structure, error handling strategy, and dependency choices (e.g., `eserde` over `serde`, `Decimal` over `f64`)
+- **Code review & audit**: used Claude to review the completed implementation against the spec, identifying edge cases and potential improvements (checked arithmetic, explicit dispute state machine, test coverage gaps)
+- **Test data generation**: the `sample_transactions.csv` dataset was generated with AI assistance to cover all operation types, edge cases, and error conditions
+- **Documentation**: README design decision sections were drafted collaboratively, with me providing the rationale and Claude helping structure the explanations
+
+All architectural decisions, business logic, and implementation choices are mine. Claude served as a reviewer and sounding board — the same role a senior colleague would fill in a code review.
 
 
 ## Architecture
