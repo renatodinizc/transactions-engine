@@ -13,8 +13,8 @@ pub fn execute(
         Some(transaction) => transaction,
         None => {
             eprintln!(
-                "Could not find stored transaction for related chargeback: {}",
-                &transaction.tx
+                "[client: {}, tx: {}] Chargeback rejected: transaction not found",
+                transaction.client, transaction.tx
             );
             return;
         }
@@ -22,16 +22,16 @@ pub fn execute(
 
     if stored_transaction.client != transaction.client {
         eprintln!(
-            "The chargeback's transaction is not from the same client. Chargeback transaction's client {}, current client: {}",
-            stored_transaction.client, transaction.client
+            "[client: {}, tx: {}] Chargeback rejected: transaction belongs to client {}",
+            transaction.client, transaction.tx, stored_transaction.client
         );
         return;
     }
 
     if !stored_transaction.disputed {
         eprintln!(
-            "Ignore chargeback because related transaction {} is not undergoing a dispute.",
-            transaction.tx
+            "[client: {}, tx: {}] Chargeback rejected: transaction is not disputed",
+            transaction.client, transaction.tx
         );
         return;
     }

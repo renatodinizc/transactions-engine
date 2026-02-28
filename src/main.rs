@@ -5,7 +5,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
-        eprintln!("ERROR: Missing <transactions.csv> arg");
+        eprintln!("[system] Missing <transactions.csv> argument");
         process::exit(1);
     }
 
@@ -13,7 +13,7 @@ fn main() {
 
     let transactions = csv_handler::read_and_parse(user_input)
         .map_err(|err| {
-            eprintln!("Error reading CSV: {err}");
+            eprintln!("[system] Error reading CSV: {err}");
             process::exit(1)
         })
         .unwrap();
@@ -22,7 +22,7 @@ fn main() {
 
     csv_handler::write_accounts(client_accounts)
         .map_err(|err| {
-            eprintln!("Error writing CSV: {err}");
+            eprintln!("[system] Error writing CSV: {err}");
             process::exit(1)
         })
         .unwrap();

@@ -62,6 +62,10 @@ If a deposit or withdrawal arrives with a transaction ID that already exists in 
 
 A chargeback locks (freezes) the client's account. Deposits and withdrawals are rejected on locked accounts, but dispute-related operations (dispute, resolve, chargeback) are still processed. Dispute resolution is corrective and administrative — blocking it would leave funds permanently trapped in held balances with no path to resolution.
 
+### Structured error logging
+
+All rejected operations are logged to stderr with a consistent format: `[client: X, tx: Y] Operation rejected: reason`. This makes it straightforward to trace every failed transaction back to a specific client and transaction ID — useful when investigating complaints like "my balance is wrong." Infrastructure errors use `[system]` and `[parse]` prefixes to separate them from transaction-level rejections. All logs can be filtered per client (e.g., `grep "client: 25"`) to reconstruct the full rejection history for that account.
+
 ## Sample Data
 
 The file `sample_transactions.csv` contains a comprehensive test dataset generated with AI assistance. It covers 41 clients across 247 transactions, exercising every operation type, edge case, and error condition. Transactions from different clients are interleaved to simulate realistic concurrent activity while maintaining chronological order per client.
@@ -154,6 +158,10 @@ These clients simulate realistic account lifecycles with multiple rounds of norm
 | 36-40 | Five clients with identical setup, disputes on 36 and 37, resolve on 36, chargeback on 37 | 36: avail=5; 37: avail=-5, locked; 38-40: avail=5 |
 
 ## Future Considerations
+
+### Success logging for full audit trails
+
+Currently only rejected operations are logged to stderr. In production, successful operations would also be logged using the same `[client: X, tx: Y]` format (e.g., `[client: 25, tx: 73] Deposit: +50 (available: 50)`), enabling `grep "client: 25"` to reconstruct a client's complete transaction history — both successes and failures. This would be implemented behind log levels using the `tracing` crate (`debug` for successes, `warn` for rejections) to keep output clean by default while allowing verbose mode when investigating issues.
 
 ### Per-client parallel processing
 

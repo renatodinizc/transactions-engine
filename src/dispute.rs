@@ -13,8 +13,8 @@ pub fn execute(
         Some(transaction) => transaction,
         None => {
             eprintln!(
-                "Could not find stored transaction for related dispute: {}",
-                &transaction.tx
+                "[client: {}, tx: {}] Dispute rejected: transaction not found",
+                transaction.client, transaction.tx
             );
             return;
         }
@@ -22,24 +22,24 @@ pub fn execute(
 
     if stored_transaction.client != transaction.client {
         eprintln!(
-            "The dispute's transaction is not from the same client. Disputed transaction's client {}, current client: {}",
-            stored_transaction.client, transaction.client
+            "[client: {}, tx: {}] Dispute rejected: transaction belongs to client {}",
+            transaction.client, transaction.tx, stored_transaction.client
         );
         return;
     }
 
     if stored_transaction.disputed {
         eprintln!(
-            "A dispute is already undergoing for the transaction {}.",
-            transaction.tx
+            "[client: {}, tx: {}] Dispute rejected: transaction already disputed",
+            transaction.client, transaction.tx
         );
         return;
     }
 
     if !stored_transaction.is_deposit {
         eprintln!(
-            "The disputed operation is not a deposit and should be ignored. Related transaction tx: {}.",
-            transaction.tx
+            "[client: {}, tx: {}] Dispute rejected: transaction is not a deposit",
+            transaction.client, transaction.tx
         );
         return;
     }

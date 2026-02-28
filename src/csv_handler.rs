@@ -41,7 +41,7 @@ pub fn read_and_parse(
             .filter_map(|result| match result {
                 Ok(record) => Some(record),
                 Err(error) => {
-                    eprintln!("Skipping malformed record: {error}");
+                    eprintln!("[parse] Skipping malformed record: {error}");
                     None
                 }
             });

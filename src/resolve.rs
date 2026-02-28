@@ -13,8 +13,8 @@ pub fn execute(
         Some(transaction) => transaction,
         None => {
             eprintln!(
-                "Could not find stored transaction for related resolve: {}",
-                &transaction.tx
+                "[client: {}, tx: {}] Resolve rejected: transaction not found",
+                transaction.client, transaction.tx
             );
             return;
         }
@@ -22,16 +22,16 @@ pub fn execute(
 
     if stored_transaction.client != transaction.client {
         eprintln!(
-            "The resolve's transaction is not from the same client. Resolve transaction's client {}, current client: {}",
-            stored_transaction.client, transaction.client
+            "[client: {}, tx: {}] Resolve rejected: transaction belongs to client {}",
+            transaction.client, transaction.tx, stored_transaction.client
         );
         return;
     }
 
     if !stored_transaction.disputed {
         eprintln!(
-            "Ignore resolve because related transaction {} is not undergoing a dispute.",
-            transaction.tx
+            "[client: {}, tx: {}] Resolve rejected: transaction is not disputed",
+            transaction.client, transaction.tx
         );
         return;
     }

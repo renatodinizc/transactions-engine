@@ -19,7 +19,7 @@ fn no_args_exits_with_error() {
     assert!(!output.status.success());
 
     let stderr = from_utf8(&output.stderr).unwrap();
-    assert!(stderr.contains("Missing"));
+    assert!(stderr.contains("[system]"));
 }
 
 #[test]
@@ -29,7 +29,7 @@ fn multiple_args_exits_with_error() {
     assert!(!output.status.success());
 
     let stderr = from_utf8(&output.stderr).unwrap();
-    assert!(stderr.contains("Missing"));
+    assert!(stderr.contains("[system]"));
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn nonexistent_file_exits_with_error() {
     assert!(!output.status.success());
 
     let stderr = from_utf8(&output.stderr).unwrap();
-    assert!(stderr.contains("Error reading CSV"));
+    assert!(stderr.contains("[system]"));
 }
 
 // ── Full pipeline integration ──────────────────────────────────────

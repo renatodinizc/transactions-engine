@@ -14,21 +14,25 @@ pub fn execute(
         Some(a) if a > Decimal::ZERO => a,
         _ => {
             eprintln!(
-                "not a valid amount number to deposit: {:?}",
-                transaction.amount
+                "[client: {}, tx: {}] Deposit rejected: invalid amount ({:?})",
+                transaction.client, transaction.tx, transaction.amount
             );
             return;
         }
     };
 
     if account.locked {
+        eprintln!(
+            "[client: {}, tx: {}] Deposit rejected: account is locked",
+            transaction.client, transaction.tx
+        );
         return;
     }
 
     if stored_transactions.contains_key(&transaction.tx) {
         eprintln!(
-            "Duplicate transaction ID {}, ignoring deposit.",
-            transaction.tx
+            "[client: {}, tx: {}] Deposit rejected: duplicate transaction ID",
+            transaction.client, transaction.tx
         );
         return;
     }

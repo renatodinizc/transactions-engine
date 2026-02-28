@@ -14,21 +14,25 @@ pub fn execute(
         Some(a) if a > Decimal::ZERO => a,
         _ => {
             eprintln!(
-                "not a valid amount number to withdraw: {:?}",
-                transaction.amount
+                "[client: {}, tx: {}] Withdrawal rejected: invalid amount ({:?})",
+                transaction.client, transaction.tx, transaction.amount
             );
             return;
         }
     };
 
     if account.locked {
+        eprintln!(
+            "[client: {}, tx: {}] Withdrawal rejected: account is locked",
+            transaction.client, transaction.tx
+        );
         return;
     }
 
     if stored_transactions.contains_key(&transaction.tx) {
         eprintln!(
-            "Duplicate transaction ID {}, ignoring withdraw.",
-            transaction.tx
+            "[client: {}, tx: {}] Withdrawal rejected: duplicate transaction ID",
+            transaction.client, transaction.tx
         );
         return;
     }
@@ -47,8 +51,8 @@ pub fn execute(
         );
     } else {
         eprintln!(
-            "insufficient balance in account {:?} of client {} to execute withdraw. transaction {:?}.",
-            account, transaction.client, transaction.tx
+            "[client: {}, tx: {}] Withdrawal rejected: insufficient funds (available: {}, requested: {})",
+            transaction.client, transaction.tx, account.available, amount
         )
     }
 }
