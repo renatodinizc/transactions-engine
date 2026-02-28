@@ -62,6 +62,97 @@ If a deposit or withdrawal arrives with a transaction ID that already exists in 
 
 A chargeback locks (freezes) the client's account. Deposits and withdrawals are rejected on locked accounts, but dispute-related operations (dispute, resolve, chargeback) are still processed. Dispute resolution is corrective and administrative — blocking it would leave funds permanently trapped in held balances with no path to resolution.
 
+## Sample Data
+
+The file `sample_transactions.csv` contains a comprehensive test dataset generated with AI assistance. It covers 41 clients across 247 transactions, exercising every operation type, edge case, and error condition. Transactions from different clients are interleaved to simulate realistic concurrent activity while maintaining chronological order per client.
+
+### Basic operations & spec reference
+
+| Client | Scenario | Flow | Expected |
+|--------|----------|------|----------|
+| 1 | Deposits and partial withdrawal | deposit → deposit → withdrawal | avail=1.5, unlocked |
+| 2 | Withdrawal exceeding balance | deposit → withdrawal (rejected) | avail=2, unlocked |
+| 15 | Multiple deposits, withdrawals, one rejected | deposit ×3 → withdrawal ×3 (one rejected) → deposit → withdrawal | avail=85, unlocked |
+| 16 | Exact balance withdrawals | deposit → withdrawal → deposit → withdrawal → deposit | avail=5, unlocked |
+| 31 | Operations reducing balance to zero | deposit → withdrawal → deposit → withdrawal → deposit → withdrawal | avail=0, unlocked |
+
+### Dispute flows
+
+| Client | Scenario | Flow | Expected |
+|--------|----------|------|----------|
+| 3 | Dispute resolved | deposit → dispute → resolve | avail=10, unlocked |
+| 4 | Dispute chargebacked | deposit → dispute → chargeback | avail=0, locked |
+| 12 | Full lifecycle with re-dispute | deposit → dispute → resolve → dispute → chargeback | avail=0, locked |
+| 17 | Dispute blocks withdrawal, resolve frees | deposits → withdrawals → dispute → withdrawal (rejected) → resolve → withdrawal | avail=350, unlocked |
+| 26 | Triple dispute on same tx | deposit → dispute → dispute (ignored) → dispute (ignored) → resolve | avail=10, unlocked |
+| 33 | Withdrawal rejected during dispute | deposit → dispute → withdrawal (rejected) → resolve → withdrawal | avail=5, unlocked |
+
+### Locked account behavior
+
+| Client | Scenario | Flow | Expected |
+|--------|----------|------|----------|
+| 5 | Locked account rejects deposit and withdrawal | deposits → dispute → chargeback → deposit (rejected) → withdrawal (rejected) | avail=10, locked |
+| 25 | Locked account, dispute on withdrawal ignored | deposit → withdrawal → dispute → chargeback → deposit (rejected) → dispute on withdrawal (rejected) | avail=-20, locked |
+| 18 | Multiple chargebacks, one dispute left in held | deposits ×3 → disputes → chargebacks → dispute remaining | avail=0, held=10, locked |
+
+### Edge cases
+
+| Client | Scenario | Flow | Expected |
+|--------|----------|------|----------|
+| 6 | Negative available after dispute | deposit → withdrawal → dispute | avail=-7, held=10 |
+| 7 | Cross-client dispute rejected | deposit → dispute on another client's tx (rejected) | avail=20 |
+| 8 | Resolve without prior dispute | deposit → resolve (ignored) | avail=10 |
+| 9 | Chargeback without prior dispute | deposit → chargeback (ignored) | avail=10 |
+| 10 | Duplicate deposit tx ID rejected | deposit → deposit same tx (rejected) | avail=10 |
+| 11 | Dispute before deposit exists | dispute (ignored) → deposit | avail=10 |
+| 24 | Duplicate tx IDs across deposit/withdrawal | deposit → deposit same tx (rejected) → withdrawal → deposit same tx as withdrawal (rejected) | avail=5 |
+| 27 | Re-dispute after chargeback | deposit → dispute → chargeback → resolve (ignored) → dispute (succeeds) | avail=-10, held=10, locked |
+| 32 | Dispute/resolve/chargeback on nonexistent txs | deposit → dispute/resolve/chargeback on missing tx IDs (all ignored) | avail=10 |
+
+### Bad & malformed data
+
+| Client | Scenario | Flow | Expected |
+|--------|----------|------|----------|
+| 13 | Zero, negative, and missing amounts | bad deposits (ignored ×3) → good deposit → bad withdrawals (ignored ×3) → good withdrawal | avail=40 |
+| 28 | No-whitespace CSV formatting | deposit → deposit → withdrawal → dispute → resolve (no spaces) | avail=12 |
+| 29 | Extra whitespace in amounts | deposit → deposit → withdrawal → dispute → chargeback (padded amounts) | avail=5, locked |
+
+### Precision
+
+| Client | Scenario | Flow | Expected |
+|--------|----------|------|----------|
+| 14 | 4-decimal place arithmetic with dispute/resolve | deposits with 4dp → withdrawal → dispute → resolve | avail=11.6244 |
+| 22 | Withdrawal of nearly all funds | deposit 1000 → withdrawal 999.9999 | avail=0.0001 |
+| 23 | Tiny amounts | deposits at 0.0001 scale → withdrawal | avail=0.0002 |
+| 30 | Decimal precision across operations | deposits → withdrawal → dispute → resolve → withdrawal (all 4dp) | avail=3.3333 |
+
+### Long-lived accounts (clients 42-45)
+
+These clients simulate realistic account lifecycles with multiple rounds of normal operations interspersed with dispute cycles. Their transactions are interleaved across clients to simulate concurrent activity.
+
+**Client 42** — Normal ops → dispute resolved → more ops → dispute chargebacked → post-lock activity
+- Deposits and withdrawals build up activity, first dispute on a 200 deposit is resolved, operations continue, then a 500 deposit is disputed and chargebacked leaving negative balance. After lock: multiple deposits and withdrawals rejected, a previous deposit is re-disputed and resolved (dispute resolution still works on locked accounts), more deposits/withdrawals rejected.
+- Expected: avail=-75, locked
+
+**Client 43** — Normal ops → dispute resolved → normal ops → chargeback → dispute activity on locked → post-lock rejections
+- Large initial deposit disputed and resolved, then normal withdrawals, a smaller deposit is chargebacked (locks account). After lock: deposits and withdrawals rejected, a previously resolved deposit is re-disputed and chargebacked (removing another 50 from total), more deposits/withdrawals rejected.
+- Expected: avail=500, locked
+
+**Client 44** — Two simultaneous disputes, one resolved one chargebacked, then dispute resolved on locked account
+- Three deposits, two disputed simultaneously, one resolved and one chargebacked (locks), further deposit/withdrawal rejected, third deposit disputed and resolved while locked.
+- Expected: avail=350, locked
+
+**Client 45** — Three dispute cycles: resolved → chargebacked → resolved on locked
+- Active account with deposits/withdrawals between each dispute cycle. First dispute resolved (funds return), second chargebacked (locks account), third dispute resolved on the locked account. Deposits and withdrawals after lock are rejected.
+- Expected: avail=175, locked
+
+### Multi-client interleaved operations
+
+| Client | Scenario | Expected |
+|--------|----------|----------|
+| 19-21 | Three clients with interleaved deposits, withdrawals, and a chargeback on client 21 | 19: avail=70; 20: avail=20; 21: avail=0, locked |
+| 36-40 | Five clients with identical setup, disputes on 36 and 37, resolve on 36, chargeback on 37 | 36: avail=5; 37: avail=-5, locked; 38-40: avail=5 |
+
 ## Future Considerations
 
 ### Per-client parallel processing
