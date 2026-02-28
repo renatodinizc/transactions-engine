@@ -24,6 +24,7 @@ pub struct StoredTransaction {
     pub client: u16,
     pub amount: Decimal,
     pub disputed: bool,
+    pub is_deposit: bool,
 }
 
 pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16, Account> {
@@ -42,7 +43,7 @@ pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16
             TransactionOperation::Withdrawal => {
                 let client_account = client_accounts.entry(transaction.client).or_default();
 
-                withdraw::execute(client_account, transaction.amount);
+                withdraw::execute(&mut stored_transactions, client_account, transaction);
             }
             TransactionOperation::Dispute => {
                 let client_account = client_accounts.entry(transaction.client).or_default();
@@ -237,21 +238,18 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_tx_id_overwrites_ledger_entry() {
-        // Two deposits with same tx ID — second overwrites the first
+    fn duplicate_tx_id_rejects_second_deposit() {
         let transactions = vec![
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(5.0))),
-            // Dispute tx 1 — should use the overwritten amount (5.0)
             make_tx(TransactionOperation::Dispute, 1, 1, None),
         ];
 
         let accounts = process_transactions(transactions);
         let a1 = accounts.get(&1).unwrap();
-        // Both deposits credited: 10 + 5 = 15
-        // Dispute holds the second deposit's amount: 15 - 5 = 10 available, 5 held
-        assert_eq!(a1.available, dec!(10.0));
-        assert_eq!(a1.held, dec!(5.0));
+        // Second deposit rejected — only 10 credited, dispute holds all of it
+        assert_eq!(a1.available, Decimal::ZERO);
+        assert_eq!(a1.held, dec!(10.0));
     }
 
     #[test]

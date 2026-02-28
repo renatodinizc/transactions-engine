@@ -44,9 +44,17 @@ I chose skipping over aborting because:
 
 ### Disputes only apply to deposits
 
-The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would further decrease available on an account that already lost funds. For this reason, only deposit transactions are stored in the ledger and eligible for disputes.
+The spec's dispute mechanics (decrease available, increase held, total unchanged) only produce correct accounting when applied to deposits. Applying the same mechanics to a withdrawal would further decrease available on an account that already lost funds. Both deposits and withdrawals are stored in a shared transaction ledger, but each entry carries an `is_deposit` flag. Disputes check this flag and reject any attempt to dispute a non-deposit transaction.
 
-In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics -- reversing the withdrawal by increasing available rather than holding funds. This is a meaningful extension that the current architecture could support by adding a transaction type field to the ledger.
+In a production environment, withdrawal disputes would also be needed (e.g., unauthorized withdrawals), but would require different mechanics -- reversing the withdrawal by increasing available rather than holding funds.
+
+### Disputes can produce negative available balances
+
+If a client deposits funds, withdraws some, and the original deposit is later disputed, the available balance goes negative. This is intentional — a negative available balance accurately represents a liability (the client spent money they may not be entitled to). Blocking the dispute when available is insufficient would create a fraud vector: a malicious actor could deposit, immediately withdraw, and become immune to disputes. Real payment processors (Stripe, PayPal, crypto exchanges) all allow negative balances during disputes and recover through clawback mechanisms on future deposits.
+
+### Duplicate transaction IDs are rejected
+
+If a deposit or withdrawal arrives with a transaction ID that already exists in the ledger, the operation is rejected entirely — no balance change, no ledger overwrite. Transaction IDs are expected to be globally unique per the spec. Silently overwriting would lose the original transaction's dispute state and could double-credit or double-debit the account.
 
 ### Locked accounts block deposits and withdrawals, not dispute resolution
 

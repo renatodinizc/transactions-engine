@@ -36,6 +36,14 @@ pub fn execute(
         return;
     }
 
+    if !disputed_transaction.is_deposit {
+        eprintln!(
+            "The disputed operation is not a deposit and should be ignored. Related transaction tx: {}.",
+            current_transaction.tx
+        );
+        return;
+    }
+
     // From here onwards the dispute is considered valid
 
     account.available -= disputed_transaction.amount;
@@ -73,6 +81,7 @@ mod tests {
                 client,
                 amount,
                 disputed: false,
+                is_deposit: true,
             },
         );
         account
@@ -151,6 +160,7 @@ mod tests {
                 client: 1,
                 amount: dec!(10.0),
                 disputed: false,
+                is_deposit: true,
             },
         );
 

@@ -24,6 +24,14 @@ pub fn execute(
         return;
     }
 
+    if stored_transactions.contains_key(&transaction.tx) {
+        eprintln!(
+            "Duplicate transaction ID {}, ignoring deposit.",
+            transaction.tx
+        );
+        return;
+    }
+
     account.available += amount;
 
     stored_transactions.insert(
@@ -32,6 +40,7 @@ pub fn execute(
             amount,
             client: transaction.client,
             disputed: false,
+            is_deposit: true,
         },
     );
 }

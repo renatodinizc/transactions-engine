@@ -73,6 +73,7 @@ mod tests {
                 client,
                 amount,
                 disputed: true,
+                is_deposit: true,
             },
         );
         account
@@ -148,6 +149,7 @@ mod tests {
                 client: 1,
                 amount: dec!(10.0),
                 disputed: false,
+                is_deposit: true,
             },
         );
 
