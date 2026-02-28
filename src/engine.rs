@@ -27,7 +27,9 @@ pub struct StoredTransaction {
     pub is_deposit: bool,
 }
 
-pub fn process_transactions(transactions: Vec<TransactionRecord>) -> HashMap<u16, Account> {
+pub fn process_transactions(
+    transactions: impl Iterator<Item = TransactionRecord>,
+) -> HashMap<u16, Account> {
     // Storing accounts in a hashmap permits O(1) lookups instead
     // of using Vec<ClientAccount> which would do an O(n) lookup.
     let mut client_accounts: HashMap<u16, Account> = HashMap::new();
@@ -89,7 +91,7 @@ mod tests {
             make_tx(TransactionOperation::Withdrawal, 2, 5, Some(dec!(3.0))),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
 
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(1.5));
@@ -114,7 +116,7 @@ mod tests {
             make_tx(TransactionOperation::Resolve, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(10.0));
         assert_eq!(a1.held, Decimal::ZERO);
@@ -129,7 +131,7 @@ mod tests {
             make_tx(TransactionOperation::Chargeback, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, Decimal::ZERO);
         assert_eq!(a1.held, Decimal::ZERO);
@@ -148,7 +150,7 @@ mod tests {
             make_tx(TransactionOperation::Chargeback, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, Decimal::ZERO);
         assert_eq!(a1.held, Decimal::ZERO);
@@ -168,7 +170,7 @@ mod tests {
             make_tx(TransactionOperation::Withdrawal, 2, 3, Some(dec!(5.0))),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
 
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, Decimal::ZERO);
@@ -192,7 +194,7 @@ mod tests {
             make_tx(TransactionOperation::Withdrawal, 1, 6, Some(dec!(20.0))),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
 
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(50.0));
@@ -222,7 +224,7 @@ mod tests {
             make_tx(TransactionOperation::Dispute, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(-7.0));
         assert_eq!(a1.held, dec!(10.0));
@@ -237,7 +239,7 @@ mod tests {
             make_tx(TransactionOperation::Dispute, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         // Second deposit rejected — only 10 credited, dispute holds all of it
         assert_eq!(a1.available, Decimal::ZERO);
@@ -256,7 +258,7 @@ mod tests {
             make_tx(TransactionOperation::Withdrawal, 1, 4, Some(dec!(5.0))),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(10.0));
         assert_eq!(a1.held, Decimal::ZERO);
@@ -272,7 +274,7 @@ mod tests {
             make_tx(TransactionOperation::Dispute, 2, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
 
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(10.0));
@@ -290,7 +292,7 @@ mod tests {
             make_tx(TransactionOperation::Resolve, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(10.0));
         assert_eq!(a1.held, Decimal::ZERO);
@@ -303,7 +305,7 @@ mod tests {
             make_tx(TransactionOperation::Chargeback, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, dec!(10.0));
         assert_eq!(a1.held, Decimal::ZERO);
@@ -318,7 +320,7 @@ mod tests {
             make_tx(TransactionOperation::Deposit, 1, 1, Some(dec!(10.0))),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         // Dispute was a no-op, deposit still credited normally
         assert_eq!(a1.available, dec!(10.0));
@@ -337,7 +339,7 @@ mod tests {
             make_tx(TransactionOperation::Chargeback, 1, 2, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, Decimal::ZERO);
         assert_eq!(a1.held, Decimal::ZERO);
@@ -355,7 +357,7 @@ mod tests {
             make_tx(TransactionOperation::Resolve, 1, 1, None),
         ];
 
-        let accounts = process_transactions(transactions);
+        let accounts = process_transactions(transactions.into_iter());
         let a1 = accounts.get(&1).unwrap();
         assert_eq!(a1.available, Decimal::ZERO);
         assert_eq!(a1.held, Decimal::ZERO);

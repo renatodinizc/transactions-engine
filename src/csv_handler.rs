@@ -27,22 +27,24 @@ pub enum TransactionOperation {
     Chargeback,
 }
 
-pub fn read_and_parse(file_path: &str) -> Result<Vec<TransactionRecord>, csv::Error> {
-    let mut reader = ReaderBuilder::new()
+pub fn read_and_parse(
+    file_path: &str,
+) -> Result<impl Iterator<Item = TransactionRecord>, csv::Error> {
+    let reader = ReaderBuilder::new()
         .trim(csv::Trim::All)
         .flexible(true)
         .from_path(file_path)?;
 
-    let results = reader
-        .deserialize::<TransactionRecord>()
-        .filter_map(|result| match result {
-            Ok(record) => Some(record),
-            Err(error) => {
-                eprintln!("Skipping malformed record: {error}");
-                None
-            }
-        })
-        .collect();
+    let results =
+        reader
+            .into_deserialize::<TransactionRecord>()
+            .filter_map(|result| match result {
+                Ok(record) => Some(record),
+                Err(error) => {
+                    eprintln!("Skipping malformed record: {error}");
+                    None
+                }
+            });
 
     Ok(results)
 }
